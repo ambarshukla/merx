@@ -7,6 +7,15 @@ trustworthy.
 > **Status: scaffolding.** Nothing is built yet. This README will be replaced as
 > the first phase lands.
 
+## Provenance
+
+**Everything here is built from public sources or is synthetic. There is no
+confidential, proprietary or employer information anywhere in this repository.**
+It is an independent personal project, not affiliated with or written on behalf of
+any employer, data vendor or exchange. Fetched data is never committed, and every
+synthetic component is labelled as such. Details and the list of sources:
+[`docs/PROVENANCE.md`](docs/PROVENANCE.md).
+
 ## What it will be
 
 One shared engine that turns declarative **dataset contracts** into controlled
