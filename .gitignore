@@ -1,0 +1,32 @@
+# Session guide: lives in the repo folder, never pushed
+CLAUDE.md
+
+# Secrets and local config
+.env
+.claude/settings.local.json
+.obsidian/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv-*/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local data (regenerable; vendor data is never committed)
+data/
+*.duckdb
+*.duckdb.wal
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
