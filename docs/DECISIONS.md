@@ -22,3 +22,25 @@ duplicates logic, no shared controls); a heavyweight ingestion framework
 **Consequences.** Time to onboard a dataset becomes a measurable number. Controls
 and monitoring are written once. The cost is up-front design of the contract
 shape, and a contract language that must stay small enough to read.
+
+## D-002: Public sources only; fetched data is never committed (2026-10-14)
+
+**Context.** The project works on real commodity data, and some sources sit behind
+licences that restrict redistribution. A reference repository must be safe to
+publish and easy to trust.
+
+**Decision.** Use only public sources. Fetch data on demand into a gitignored
+directory; commit code, configuration, documentation and small synthetic fixtures
+only. Skip any licensed benchmark that blocks automated access rather than working
+around the block. Label every synthetic component as synthetic. Record each source's
+terms in [`PROVENANCE.md`](PROVENANCE.md) before anything derived from it is shared.
+
+**Alternatives considered.** Committing sample extracts so the tests run offline
+(convenient, but it redistributes data whose terms are not yet confirmed); using a
+paid or licensed feed (not reproducible by a reader, and brings real licence
+obligations).
+
+**Consequences.** Anyone can run the project from a clean checkout with only the
+public internet. Tests that need real data must either fetch it or use synthetic
+fixtures, so fixtures are written deliberately to carry the edge cases (negative
+prices, clock-change days, missing releases).

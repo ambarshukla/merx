@@ -1,0 +1,39 @@
+# Provenance
+
+**Everything in this repository is built from public sources or is synthetic.
+There is no confidential, proprietary or employer information anywhere in it.**
+
+This is an independent personal project. It is not affiliated with, endorsed by, or
+written on behalf of any employer, data vendor or exchange. Product and organisation
+names that appear belong to their owners and are used only to identify public sources.
+
+## The rules this repository follows
+
+1. **Public sources only.** Every real dataset comes from a publicly available
+   source, fetched on demand over the public internet with no special access.
+2. **No vendor feeds, no licensed data.** Where a source is a licensed benchmark and
+   refuses automated access, it is skipped rather than worked around.
+3. **Nothing fetched is committed.** Downloaded data lives in the gitignored `data/`
+   directory. The repository holds code, configuration, documentation and tiny
+   synthetic test fixtures, nothing else.
+4. **Synthetic parts are labelled as synthetic**, wherever they appear: injected
+   defects, the full forward curve, and the deliberately fragile "legacy" pipelines.
+   They are invented for demonstration and copy nobody's code or data.
+5. **No credentials in the repository.** Keys live in a local `.env` (gitignored);
+   `.env.example` carries placeholders only.
+6. **Terms are checked per source** before anything derived from it is shared. Each
+   source's terms are recorded below as they are confirmed.
+
+## Sources
+
+| Source | Used for | Access | Terms |
+|---|---|---|---|
+| U.S. Energy Information Administration (EIA) | Spot prices, futures prices, weekly stocks and storage | Public bulk downloads; free API key for the API | U.S. government publication; to be confirmed in the first phase |
+| U.S. Commodity Futures Trading Commission (CFTC) | Commitments of Traders positioning | Public downloads | U.S. government publication; to be confirmed |
+| World Bank Commodity Markets | Monthly prices across many commodities and units | Public download | Open licence with attribution; to be confirmed |
+| U.S. Department of Agriculture, Foreign Agricultural Service | Agricultural supply and demand | Public bulk download | U.S. government publication; to be confirmed |
+| Elexon (Great Britain) | Half-hourly power system prices | Public API, no key | Open data with attribution; to be confirmed |
+| UK carbon intensity API | Grid carbon intensity, forecast and actual | Public API, no key | Open licence with attribution; to be confirmed |
+
+"To be confirmed" means the terms have not yet been read and recorded here. Until they
+are, nothing derived from that source is published.
