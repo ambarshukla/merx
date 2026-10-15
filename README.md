@@ -5,9 +5,10 @@ as a small, honest version of how commodity datasets are manufactured and kept
 trustworthy.
 
 > **Status: early.** Eight real datasets from two public sources run end to end through
-> the engine (contract → raw download → staged table → checks, orchestrated by
-> Dagster), and the data-quality lab scores anomaly detectors on them. Still to come:
-> the publish gate, point-in-time views, and the consoles.
+> the engine (contract → raw download → staged table → checks → publish gate,
+> orchestrated by Dagster), failing checks become tracked exceptions, and the
+> data-quality lab scores anomaly detectors on the data. Still to come: point-in-time
+> views and the consoles.
 
 ## What runs today
 
@@ -27,20 +28,26 @@ equals all long positions plus spreads, and all short positions plus spreads. It
 in all 875 weeks since 2010 for both markets.
 
 Each dataset is one YAML file in [`contracts/`](contracts/). A factory turns every
-contract into two Dagster assets and its checks:
+contract into three Dagster assets:
 
 ```
 contracts/eia_wti_spot.yaml
         │
         ▼
-raw/eia_wti_spot      download, keep the file untouched in data/raw/, record it in the manifest
+raw/eia_wti_spot        download, keep the file untouched in data/raw/, record it in the manifest
         │
         ▼
-staged/eia_wti_spot   parse strictly, rebuild staged."eia_wti_spot" in DuckDB
-        │
-        ├─ not_null_value              ├─ range_value
-        └─ unique_measure_valid_date   └─ freshness
+staged/eia_wti_spot     parse strictly, rebuild staged."eia_wti_spot", then run the contract's
+        │               checks on that build: not_null_value, unique_measure_valid_date,
+        │               range_value, freshness. Failures open exceptions (ops.exceptions).
+        ▼
+published/eia_wti_spot  the gate: tier 1 publishes only if no error-level check failed;
+                        tiers 2 and 3 publish marked "warn". Every attempt is logged.
 ```
+
+On the first live run all eight datasets published; the futures series (tier 3) is
+marked `warn` because its newest value is from April 2024, and its open exception
+carries the root cause `source_discontinued`.
 
 Every staged table has the same long shape: one row per `(measure, valid_date)`, with
 the value, its unit, our instrument identifier, and the raw file and fetch time it came
@@ -87,7 +94,7 @@ set `DAGSTER_HOME` to an absolute path to keep run history between sessions.
 | `src/merx/contracts/` | The contract schema and loader |
 | `src/merx/sources/` | Downloading, and one strict parser per file format (EIA spreadsheets, CFTC yearly zips) |
 | `src/merx/store/` | The raw zone and its manifest; the DuckDB connection |
-| `src/merx/engine/` | Staging and checks, as plain functions |
+| `src/merx/engine/` | Staging, checks, the publish gate and exceptions, as plain functions |
 | `src/merx/quality/` | The data-quality lab: seeded defects, detectors, scoring |
 | `src/merx/orchestration/` | Dagster: the asset factory, resources, schedules |
 | `tests/` | Tests on synthetic files generated at test time |

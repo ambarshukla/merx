@@ -7,10 +7,12 @@ from and when that file was fetched (its knowledge time), which is what the
 point-in-time store will build on.
 """
 
+import hashlib
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
+import duckdb
 import pyarrow as pa
 
 from merx.contracts import Contract
@@ -29,9 +31,21 @@ CREATE TABLE IF NOT EXISTS meta.release_log (
 """
 
 
+_BUILDS_DDL = """
+CREATE TABLE IF NOT EXISTS meta.stage_builds (
+    dataset_id     VARCHAR   NOT NULL,
+    build_id       VARCHAR   NOT NULL,
+    staged_at_utc  TIMESTAMP NOT NULL,
+    rows           BIGINT    NOT NULL,
+    raw_files      INTEGER   NOT NULL
+)
+"""
+
+
 @dataclass(frozen=True)
 class StageResult:
     table: str
+    build_id: str
     rows: int
     null_values: int
     first_date: date
@@ -41,6 +55,24 @@ class StageResult:
 
 def staged_table(contract: Contract) -> str:
     return f'staged."{contract.id}"'
+
+
+def build_id_for(dataset_id: str, raw_paths: list[str]) -> str:
+    """A fingerprint of exactly which raw files a staged table was built from. Checks and
+    the publish gate refer to it, so a result always belongs to one specific build."""
+    text = "\n".join([dataset_id, *sorted(raw_paths)])
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+def current_build(con: duckdb.DuckDBPyConnection, dataset_id: str) -> str | None:
+    """The build the staged table currently holds."""
+    con.execute(_BUILDS_DDL)
+    row = con.execute(
+        "SELECT build_id FROM meta.stage_builds WHERE dataset_id = ? "
+        "ORDER BY staged_at_utc DESC LIMIT 1",
+        [dataset_id],
+    ).fetchone()
+    return None if row is None else row[0]
 
 
 def stage(
@@ -60,6 +92,7 @@ def stage(
     if unexpected:
         raise ValueError(f"{contract.id}: file produced undeclared measures {sorted(unexpected)}")
     n = len(rows_in)
+    build_id = build_id_for(contract.id, [landed.path for landed, _ in parts])
     table = pa.table(
         {
             "dataset_id": [contract.id] * n,
@@ -74,6 +107,7 @@ def stage(
             ),
             "raw_sha256": [f.sha256 for _, _, _, f in rows_in],
             "raw_path": [f.path for _, _, _, f in rows_in],
+            "build_id": [build_id] * n,
         }
     )
     name = staged_table(contract)
@@ -104,10 +138,16 @@ def stage(
         measures = [
             m for (m,) in con.execute(f"SELECT DISTINCT measure FROM {name} ORDER BY 1").fetchall()
         ]
+        con.execute(_BUILDS_DDL)
+        con.execute(
+            "INSERT INTO meta.stage_builds VALUES (?, ?, ?, ?, ?)",
+            [contract.id, build_id, datetime.now(UTC).replace(tzinfo=None), rows, len(parts)],
+        )
     finally:
         con.close()
     return StageResult(
         table=name,
+        build_id=build_id,
         rows=rows,
         null_values=nulls,
         first_date=first,

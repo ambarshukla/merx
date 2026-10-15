@@ -12,6 +12,7 @@ uses them.
 | **Bcf** | Billion cubic feet, the unit for US natural gas volumes such as gas in storage. |
 | **Bitemporal** | Storing two times per fact: when it applied (valid time) and when we learned it (knowledge time). |
 | **Blocking check** | An asset check whose failure stops anything downstream in the same run. Here: error-severity checks on tier 1 datasets. |
+| **Build (staged build)** | One rebuild of a staged table, identified by a fingerprint of the raw files it came from. Check results and publications refer to it. |
 | **Brent** | The main international crude oil price benchmark, originally for oil from the North Sea. |
 | **CFTC (Commodity Futures Trading Commission)** | The US regulator of futures markets. Publishes weekly reports of who holds futures positions. |
 | **COT (Commitments of Traders)** | The CFTC's weekly report of futures positions by type of trader, as of Tuesday and published the following Friday. |
@@ -22,6 +23,7 @@ uses them.
 | **Data contract** | A declarative description of a dataset: source, schema, units, calendar, tier, release schedule, owner and rules. |
 | **DuckDB** | An analytical SQL database that runs inside the program using it and stores everything in one file. Allows one writing process per file. |
 | **EIA (U.S. Energy Information Administration)** | The statistics agency of the US Department of Energy. Publishes energy prices, stocks and production data. |
+| **Exception** | A failing check turned into a work item: owner, when it opened and closed, how often it was seen, and its root cause. |
 | **FOB (free on board)** | A price for a cargo at the point of loading, before shipping costs. |
 | **Freshness check** | Fails when the newest value in a dataset is older than a stated number of days. Looks at the data, not at the file's date. |
 | **Futures contract** | An exchange-traded agreement to buy or sell a set quantity of a commodity at a set price on a future date. |
@@ -42,11 +44,14 @@ uses them.
 | **PRA (price reporting agency)** | An organisation that assesses physical commodity prices from market evidence, for example Platts or Argus. |
 | **Precision** | Of the values a detector flags, the share that are truly wrong. Low precision means wasted reviewer time. |
 | **Producer/merchant** | In the COT report, companies that produce, process or use the physical commodity and use futures to hedge. |
+| **Publish gate** | The rule that decides whether a staged build reaches users: every check must have run on it, and for tier 1 no error-level check may fail. |
 | **Quarantine (detector)** | A flagged value is not used as the reference or in the yardstick for judging later values, so one bad value cannot distort the next judgements. |
 | **Raw zone (landing zone)** | Where downloads are stored exactly as received, never edited. Everything downstream is rebuilt from it. |
 | **Recall** | Of the values that are truly wrong, the share a detector flags. Low recall means errors reach users. |
 | **Release calendar** | When a source publishes each update. EIA states the current and next release date inside each file. |
+| **Repeat share** | The share of exceptions that recur on a check that has failed before. A high share means fixes are not holding. |
 | **Resource (Dagster)** | A shared service an asset asks for by name, such as the downloader or the data store; tests swap in a fake. |
+| **Root cause** | Why an exception happened, from a fixed list (source late, source format change, market event, pipeline bug and so on), assigned by a person. |
 | **Roll** | Moving from an expiring futures contract to the next one. A "generic" series such as front-month rolls by a stated rule. |
 | **Seeded defect** | A synthetic error deliberately injected into a copy of real data, and recorded, so detectors can be scored exactly. |
 | **Settlement price** | The exchange's official end-of-day price, used for margining. Distinct from the last traded price. |
@@ -58,5 +63,6 @@ uses them.
 | **Stale run (stuck feed)** | The same value repeated where it should have changed, usually because a feed stopped updating. |
 | **Swap dealer** | In the COT report, banks and dealers that use futures to hedge swaps they have written for clients. |
 | **Tier** | How critical a dataset is. Tier 1 gets blocking checks and immediate alerts; lower tiers get warnings and next-day review. |
+| **Time to recover** | How long an exception stayed open, from the first failing check to the first passing one. |
 | **WTI (West Texas Intermediate)** | The main US crude oil price benchmark, priced at Cushing, Oklahoma. |
 | **Z-score** | How many typical deviations a value lies from normal. The robust version uses the median and MAD instead of the mean and standard deviation. |
