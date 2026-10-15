@@ -1,0 +1,24 @@
+# Henry Hub natural gas spot price: the main US gas benchmark.
+id: eia_henry_hub_spot
+title: Henry Hub natural gas spot price, daily
+domain: gas
+owner: gas-data-steward
+tier: 1
+frequency: daily
+instrument: HENRY_HUB_SPOT
+unit: USD/MMBtu
+source:
+  provider: eia
+  format: eia_hist_xls
+  url: https://www.eia.gov/dnav/ng/hist_xls/RNGWHHDd.xls
+  series_key: RNGWHHD
+schedule:
+  cron: "30 18 * * 1-5"
+  timezone: America/New_York
+checks:
+  # The source itself has no value for 2018-01-05 (observed 2026-10-15). The gap is
+  # accepted here by name, so any new gap still fails.
+  - {type: not_null, column: value, allow: [2018-01-05]}
+  - {type: unique, columns: [valid_date]}
+  - {type: range, column: value, min: -10, max: 100}
+  - {type: freshness, max_age_days: 10}

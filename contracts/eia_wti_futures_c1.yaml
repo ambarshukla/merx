@@ -1,0 +1,25 @@
+# WTI crude oil futures, nearest contract (NYMEX contract 1).
+# Observed 2026-10-15: EIA still re-releases this file, but its newest value is
+# 2024-04-05. The freshness check is expected to fail; it is kept as a live example of
+# a file that is refreshed while its data is not.
+id: eia_wti_futures_c1
+title: WTI crude oil futures, contract 1, daily
+domain: oil
+owner: oil-data-steward
+tier: 3
+frequency: daily
+instrument: WTI_NYMEX_C1
+unit: USD/bbl
+source:
+  provider: eia
+  format: eia_hist_xls
+  url: https://www.eia.gov/dnav/pet/hist_xls/RCLC1d.xls
+  series_key: RCLC1
+schedule:
+  cron: "30 18 * * 1-5"
+  timezone: America/New_York
+checks:
+  - {type: not_null, column: value}
+  - {type: unique, columns: [valid_date]}
+  - {type: range, column: value, min: -100, max: 300}
+  - {type: freshness, max_age_days: 10, severity: warn}

@@ -13,9 +13,11 @@ __pycache__/
 .venv-*/
 .pytest_cache/
 .ruff_cache/
+.tmp_dagster_home_*/
 *.egg-info/
 
-# Local data (regenerable; vendor data is never committed)
+# Local data: never committed (D-002). Current files can be re-downloaded, but the
+# history of past downloads in data/raw cannot, so treat it as worth keeping.
 data/
 *.duckdb
 *.duckdb.wal

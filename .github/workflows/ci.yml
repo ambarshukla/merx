@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Format
+        run: ruff format --check src tests
+      - name: Lint
+        run: ruff check src tests
+      # Tests never touch the network: sources are replaced by synthetic files.
+      - name: Test
+        run: pytest

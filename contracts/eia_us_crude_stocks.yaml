@@ -1,0 +1,24 @@
+# US crude oil inventories excluding the Strategic Petroleum Reserve, weekly.
+# Each value is for the week ending Friday and is published the following Wednesday.
+id: eia_us_crude_stocks
+title: US crude oil ending stocks excluding SPR, weekly
+domain: oil
+owner: oil-data-steward
+tier: 1
+frequency: weekly
+instrument: US_CRUDE_STOCKS_EX_SPR
+unit: kbbl
+source:
+  provider: eia
+  format: eia_hist_xls
+  url: https://www.eia.gov/dnav/pet/hist_xls/WCESTUS1w.xls
+  series_key: WCESTUS1
+schedule:
+  cron: "0 12 * * 3"
+  timezone: America/New_York
+checks:
+  - {type: not_null, column: value}
+  - {type: unique, columns: [valid_date]}
+  - {type: range, column: value, min: 100000, max: 800000}
+  # Week ends Friday, published the next Wednesday, then a week until the next one.
+  - {type: freshness, max_age_days: 14}

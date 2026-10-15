@@ -1,0 +1,7 @@
+instrument_id,name,commodity,kind,location,unit
+WTI_CUSHING_SPOT,WTI crude oil spot price (FOB Cushing),crude_oil,spot,Cushing Oklahoma US,USD/bbl
+BRENT_SPOT,Brent crude oil spot price (FOB Europe),crude_oil,spot,North Sea,USD/bbl
+HENRY_HUB_SPOT,Henry Hub natural gas spot price,natural_gas,spot,Erath Louisiana US,USD/MMBtu
+WTI_NYMEX_C1,WTI crude oil futures nearest contract (NYMEX contract 1),crude_oil,future_generic,Cushing Oklahoma US,USD/bbl
+US_CRUDE_STOCKS_EX_SPR,US ending stocks of crude oil excluding the Strategic Petroleum Reserve,crude_oil,inventory,United States,kbbl
+WTI_NYMEX_FUTURES,WTI crude oil futures market (NYMEX) as reported for positioning,crude_oil,futures_market,Cushing Oklahoma US,contracts

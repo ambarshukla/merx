@@ -4,8 +4,64 @@
 as a small, honest version of how commodity datasets are manufactured and kept
 trustworthy.
 
-> **Status: scaffolding.** Nothing is built yet. This README will be replaced as
-> the first phase lands.
+> **Status: Phase 0 (foundations).** Five real EIA datasets run end to end through
+> the engine: contract → raw download → staged table → checks, orchestrated by
+> Dagster. Everything after that (enrichment, the publish gate, the quality lab,
+> point-in-time views, the consoles) is still to come.
+
+## What runs today
+
+| Dataset | Source | Frequency | Tier |
+|---|---|---|---|
+| WTI crude oil spot (Cushing) | EIA | daily | 1 |
+| Brent crude oil spot | EIA | daily | 1 |
+| Henry Hub natural gas spot | EIA | daily | 1 |
+| US crude oil stocks excluding the SPR | EIA | weekly | 1 |
+| WTI crude oil futures, contract 1 | EIA | daily (series ended 2024-04-05) | 3 |
+
+Each dataset is one YAML file in [`contracts/`](contracts/). A factory turns every
+contract into two Dagster assets and its checks:
+
+```
+contracts/eia_wti_spot.yaml
+        │
+        ▼
+raw/eia_wti_spot      download, keep the file untouched in data/raw/, record it in the manifest
+        │
+        ▼
+staged/eia_wti_spot   parse strictly, rebuild staged."eia_wti_spot" in DuckDB
+        │
+        ├─ not_null_value      ├─ range_value
+        └─ unique_valid_date   └─ freshness
+```
+
+## Run it
+
+Needs Python 3.14.
+
+```sh
+python -m venv .venv
+.venv/Scripts/pip install -e ".[dev]"      # .venv/bin/pip on macOS and Linux
+.venv/Scripts/pytest                        # no network needed
+.venv/Scripts/dagster dev                   # UI at http://localhost:3000
+```
+
+In the UI, open **Assets** and choose **Materialize all** to download and stage every
+dataset (about 2 MB). Downloads go to `./data` (set `MERX_DATA_DIR` to change it);
+set `DAGSTER_HOME` to an absolute path to keep run history between sessions.
+
+## Layout
+
+| Path | What it holds |
+|---|---|
+| `contracts/` | One YAML contract per dataset |
+| `reference/` | Instruments, units, and the crosswalk from provider codes to our identifiers |
+| `src/merx/contracts/` | The contract schema and loader |
+| `src/merx/sources/` | Downloading, and one strict parser per file format |
+| `src/merx/store/` | The raw zone and its manifest; the DuckDB connection |
+| `src/merx/engine/` | Staging and checks, as plain functions |
+| `src/merx/orchestration/` | Dagster: the asset factory, resources, schedules |
+| `tests/` | Tests on synthetic files generated at test time |
 
 ## Provenance
 
