@@ -5,6 +5,7 @@ release information the file carries. Parsers in ``merx.sources`` know file layo
 readers here apply a contract to a parser's output.
 """
 
+import gzip
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
@@ -46,5 +47,13 @@ READERS: dict[str, Callable[[bytes, Contract], ReadResult]] = {
 }
 
 
+_GZIP_MAGIC = b"\x1f\x8b"
+
+
 def read(content: bytes, contract: Contract) -> ReadResult:
+    # A file can arrive gzip-compressed for transfer (seen 2026-10-15 in a Wayback Machine
+    # copy of an EIA spreadsheet captured in 2022). The raw zone keeps the bytes as
+    # received; the compression is undone here, before the format's own parser runs.
+    if content.startswith(_GZIP_MAGIC):
+        content = gzip.decompress(content)
     return READERS[contract.source.format](content, contract)

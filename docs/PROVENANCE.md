@@ -35,6 +35,7 @@ names that appear belong to their owners and are used only to identify public so
 | U.S. Department of Agriculture, Foreign Agricultural Service | Agricultural supply and demand | Public bulk download | U.S. government publication; to be confirmed |
 | Elexon (Great Britain) | Half-hourly power system prices | Public API, no key | Open data with attribution; to be confirmed |
 | UK carbon intensity API | Grid carbon intensity, forecast and actual | Public API, no key | Open licence with attribution; to be confirmed |
+| Internet Archive, Wayback Machine | Dated past copies of the EIA files above, for point-in-time history | Public capture index and copies; fetched politely (one request at a time, paused) | The copies are of public-domain EIA files; knowledge times taken from capture times are labelled as such. Kept local like every other download. |
 
 "To be confirmed" means the terms have not yet been read and recorded here. Until they
 are, nothing derived from that source is published.

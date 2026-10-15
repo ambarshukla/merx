@@ -24,8 +24,14 @@ from merx.store import connect
 
 _COLUMNS = (
     "dataset_id, provider, url, fetched_at_utc, sha256, bytes, path, http_status, "
-    "last_modified, etag, partition"
+    "last_modified, etag, partition, origin, archive_url"
 )
+
+# Where a raw file came from. "direct": downloaded from the source by us, so its
+# fetched_at_utc is when we learned its contents. "archive": a dated copy from a public
+# web archive, so its fetched_at_utc is the archive's capture time: when the archive saw
+# the file, an upper bound on when it was first public.
+ORIGINS = ("direct", "archive")
 
 
 def _ensure_manifest(con: duckdb.DuckDBPyConnection) -> None:
@@ -45,8 +51,12 @@ def _ensure_manifest(con: duckdb.DuckDBPyConnection) -> None:
         )
         """
     )
-    # Added after the first downloads were landed; older rows have no partition.
+    # Added after the first downloads were landed; older rows take the defaults.
     con.execute("ALTER TABLE meta.raw_manifest ADD COLUMN IF NOT EXISTS partition VARCHAR")
+    con.execute(
+        "ALTER TABLE meta.raw_manifest ADD COLUMN IF NOT EXISTS origin VARCHAR DEFAULT 'direct'"
+    )
+    con.execute("ALTER TABLE meta.raw_manifest ADD COLUMN IF NOT EXISTS archive_url VARCHAR")
 
 
 @dataclass(frozen=True)
@@ -62,6 +72,8 @@ class LandedFile:
     last_modified: str | None
     etag: str | None
     partition: str | None = None
+    origin: str = "direct"
+    archive_url: str | None = None
 
 
 class RawZone:
@@ -79,11 +91,16 @@ class RawZone:
         headers: dict[str, str],
         partition: str | None = None,
         fetched_at_utc: datetime | None = None,
+        origin: str = "direct",
+        archive_url: str | None = None,
     ) -> LandedFile:
+        if origin not in ORIGINS:
+            raise ValueError(f"unknown origin {origin!r}")
         fetched = (fetched_at_utc or datetime.now(UTC)).astimezone(UTC).replace(tzinfo=None)
         digest = hashlib.sha256(content).hexdigest()
         suffix = PurePosixPath(urlparse(url).path).suffix or ".bin"
-        folder = PurePosixPath("raw", provider, dataset_id, *([partition] if partition else []))
+        subfolders = [p for p in (partition, "archive" if origin == "archive" else None) if p]
+        folder = PurePosixPath("raw", provider, dataset_id, *subfolders)
         rel = folder / f"{fetched:%Y%m%dT%H%M%S%fZ}__{digest[:12]}{suffix}"
         target = self.data_dir / rel
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -106,13 +123,15 @@ class RawZone:
             last_modified=lowered.get("last-modified"),
             etag=lowered.get("etag"),
             partition=partition,
+            origin=origin,
+            archive_url=archive_url,
         )
         con = connect(self.data_dir)
         try:
             _ensure_manifest(con)
             con.execute(
                 f"INSERT INTO meta.raw_manifest ({_COLUMNS}) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     landed.dataset_id,
                     landed.provider,
@@ -125,6 +144,8 @@ class RawZone:
                     landed.last_modified,
                     landed.etag,
                     landed.partition,
+                    landed.origin,
+                    landed.archive_url,
                 ],
             )
         finally:
@@ -132,12 +153,16 @@ class RawZone:
         return landed
 
     def latest(self, dataset_id: str) -> LandedFile:
-        """The most recent download for a dataset. Raises if there is none."""
+        """The most recent direct download for a dataset. Raises if there is none.
+
+        Archived copies are history, not a substitute for fetching: staging always reads
+        a file we downloaded ourselves."""
         con = connect(self.data_dir)
         try:
             _ensure_manifest(con)
             row = con.execute(
-                f"SELECT {_COLUMNS} FROM meta.raw_manifest WHERE dataset_id = ? "
+                f"SELECT {_COLUMNS} FROM meta.raw_manifest "
+                "WHERE dataset_id = ? AND origin = 'direct' "
                 "ORDER BY fetched_at_utc DESC LIMIT 1",
                 [dataset_id],
             ).fetchone()
@@ -148,13 +173,13 @@ class RawZone:
         return LandedFile(*row)
 
     def latest_per_partition(self, dataset_id: str) -> list[LandedFile]:
-        """The most recent download of each partition, ordered by partition."""
+        """The most recent direct download of each partition, ordered by partition."""
         con = connect(self.data_dir)
         try:
             _ensure_manifest(con)
             rows = con.execute(
                 f"SELECT {_COLUMNS} FROM meta.raw_manifest "
-                "WHERE dataset_id = ? AND partition IS NOT NULL "
+                "WHERE dataset_id = ? AND partition IS NOT NULL AND origin = 'direct' "
                 "QUALIFY row_number() OVER "
                 "(PARTITION BY partition ORDER BY fetched_at_utc DESC) = 1 "
                 "ORDER BY partition",
@@ -165,6 +190,24 @@ class RawZone:
         if not rows:
             raise LookupError(f"no raw partitions landed yet for {dataset_id}")
         return [LandedFile(*r) for r in rows]
+
+    def history(self, dataset_id: str) -> list[LandedFile]:
+        """Every raw file of a dataset, direct and archived, oldest knowledge first."""
+        con = connect(self.data_dir)
+        try:
+            _ensure_manifest(con)
+            rows = con.execute(
+                f"SELECT {_COLUMNS} FROM meta.raw_manifest WHERE dataset_id = ? "
+                "ORDER BY fetched_at_utc, path",
+                [dataset_id],
+            ).fetchall()
+        finally:
+            con.close()
+        return [LandedFile(*r) for r in rows]
+
+    def archived_captures(self, dataset_id: str) -> set[str]:
+        """The archive URLs already landed for a dataset, so imports can skip them."""
+        return {f.archive_url for f in self.history(dataset_id) if f.archive_url}
 
     def read(self, landed: LandedFile) -> bytes:
         """The bytes of a landed file, verified against the hash recorded when it landed."""

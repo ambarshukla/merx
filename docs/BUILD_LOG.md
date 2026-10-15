@@ -154,3 +154,53 @@ step fixed both (D-009).
 `warn` (futures freshness), one open exception. Result: exactly that. The exception
 needed a root-cause class the list did not have, so `source_discontinued` was added and
 assigned, with a note that the series ends 2024-04-05.
+
+## 2026-10-15: point-in-time history, backfilled from the Wayback Machine
+
+**Built.** `pit."<id>"` for every dataset: each version of each value with
+`known_from_utc`, `known_to_utc` and how it ended (`revised`, `withdrawn`), rebuilt by
+replaying every raw file; "as known at" and revision queries; an `archive/<id>` asset
+that imports dated copies from the Internet Archive's Wayback Machine (opt-in per
+contract; enabled for WTI spot, US crude stocks and US gas storage); `origin` and
+`archive_url` in the manifest. Staging never reads archived copies. Decision D-010.
+104 tests.
+
+**Probed first.** The archive holds 15 distinct copies of the gas storage file
+(2015-2026), 36 of crude stocks (2011-2026) and 51 of WTI spot (2010-2026). Every one
+of them parses with today's strict parser: the layout has not changed since 2011.
+
+**Live import.** 95 of 102 copies landed; the archive refused 7 requests (rerunning the
+import retries them). One copy, captured in 2022, was stored gzip-compressed; the
+reader now undoes a gzip layer before parsing, and the raw file stays as received.
+
+**What the history shows** (predictions in brackets, written first):
+
+| Dataset | Raw files | Known since | Revised values | Withdrawn |
+|---|---|---|---|---|
+| US gas in storage | 15 | 2015-12-27 | 7 (about 7) | 0 |
+| US crude stocks | 34 | 2011-10-19 | 1,753 (about 1,750) | 0 |
+| WTI spot | 52 | 2010-07-31 | 17 (under 20) | **744 (not predicted)** |
+| Five datasets with no archive | 2 to 17 | 2026-10-15 | 0 (0) | 0 |
+
+- **Gas storage:** four weeks of mid-2017 revised down by about 10 Bcf (first seen in a
+  2019 copy), one week of 2021 up by 4, two weeks of 2024 up by 1.
+- **Crude stocks:** between the copies of 2016-05-08 and 2016-11-12, every weekly value
+  from 1982-08-20 to 2016-04-29 was revised down, by 15.7 to 34.1 million barrels
+  (median 18.7). A whole-history change of this shape is a redefinition of the series,
+  not a set of corrections; the reason has not been verified here.
+- **WTI spot:** 17 daily prices of December 2011 revised by a few cents (first seen in a
+  copy of 2012-11-06).
+- **WTI spot, 744 values withdrawn.** Between the copies of 2026-09-05 (503,808 bytes)
+  and 2026-10-11 (471,040 bytes), 744 daily prices from 1986-01-31 to 2019-11-11
+  disappeared from the spreadsheet; 689 of them had been in it since the earliest copy
+  (2010). They fall on every weekday, and only 20 repeat the previous day's price.
+  **EIA's API still returns them** (checked: 1986-01-31 = 18.95, 1986-02-10 = 16.78,
+  2019-11-11 = 56.61, identical to the withdrawn values), and its WTI series has 10,272
+  rows against the spreadsheet's 9,523. The two channels of the same source disagree.
+
+**The gap this exposed in our own controls.** The staged WTI table, built from the
+spreadsheet, is missing those 744 days, and every check passed: not-null, uniqueness,
+range and freshness all judge only the rows that are present. Silent disappearance needs
+a different kind of check. Next: a check that fails when a build withdraws previously
+known values (the point-in-time store already detects them), and a reconciliation of
+the spreadsheet against the API.

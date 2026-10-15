@@ -11,6 +11,7 @@ new file format.
 """
 
 import re
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -18,12 +19,13 @@ from typing import Any
 import dagster as dg
 
 from merx.contracts import Contract, check_name
-from merx.engine import formats, ops
+from merx.engine import formats, ops, pit
 from merx.engine.checks import run_check
 from merx.engine.publish import publish, published_table
 from merx.engine.stage import stage, staged_table
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import Reference
+from merx.sources import wayback
 from merx.store import connect
 from merx.store.raw import RawZone
 
@@ -40,6 +42,19 @@ def staged_key(contract: Contract) -> dg.AssetKey:
 
 def published_key(contract: Contract) -> dg.AssetKey:
     return dg.AssetKey(["published", contract.id])
+
+
+def archive_key(contract: Contract) -> dg.AssetKey:
+    return dg.AssetKey(["archive", contract.id])
+
+
+def pit_key(contract: Contract) -> dg.AssetKey:
+    return dg.AssetKey(["pit", contract.id])
+
+
+def refresh_keys(contract: Contract) -> list[dg.AssetKey]:
+    """What a scheduled refresh rebuilds. The archive import is run by hand."""
+    return [raw_key(contract), staged_key(contract), published_key(contract), pit_key(contract)]
 
 
 def _tags(contract: Contract) -> dict[str, str]:
@@ -179,7 +194,95 @@ def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefi
             metadata={"quality_status": decision.status, "failed_checks": decision.failed}
         )
 
-    return [raw_asset, staged_asset, published_asset]
+    return [raw_asset, staged_asset, published_asset, *build_history_assets(contract)]
+
+
+def build_history_assets(contract: Contract) -> list[dg.AssetsDefinition]:
+    """``pit/<id>`` for every contract; ``archive/<id>`` where the contract asks for it."""
+    assets = []
+    if contract.source.archive_backfill:
+
+        @dg.asset(
+            key=archive_key(contract),
+            group_name=contract.domain,
+            description=(
+                f"{contract.title}: dated copies imported from the Wayback Machine, to "
+                "backfill history from before the project began. Knowledge time is the "
+                "archive's capture time. Run by hand; resumable."
+            ),
+            owners=[f"team:{contract.owner}"],
+            tags=_tags(contract),
+            kinds={"file"},
+        )
+        def archive_asset(
+            context: dg.AssetExecutionContext, fetcher: HttpFetcher, store: DataStore
+        ) -> dg.MaterializeResult:
+            zone = RawZone(store.path)
+            captures = wayback.parse_index(
+                fetcher.fetch(wayback.index_url(contract.source.url)).content
+            )
+            already = zone.archived_captures(contract.id)
+            landed, failed = 0, []
+            for capture in captures:
+                url = wayback.capture_url(contract.source.url, capture)
+                if url in already:
+                    continue
+                time.sleep(fetcher.polite_delay_s)
+                try:
+                    result = fetcher.fetch(url)
+                except Exception as e:  # the archive refuses some requests under load
+                    failed.append(f"{capture.timestamp}: {type(e).__name__}")
+                    continue
+                zone.land(
+                    dataset_id=contract.id,
+                    provider=contract.source.provider,
+                    url=contract.source.url,
+                    content=result.content,
+                    http_status=result.status,
+                    headers=result.headers,
+                    fetched_at_utc=capture.captured_at_utc,
+                    origin="archive",
+                    archive_url=url,
+                )
+                landed += 1
+            if failed:
+                context.log.warning(f"{len(failed)} captures not fetched; rerun to retry: {failed}")
+            return dg.MaterializeResult(
+                metadata={
+                    "captures_listed": len(captures),
+                    "already_landed": len(already),
+                    "landed_now": landed,
+                    "failed": failed,
+                }
+            )
+
+        assets.append(archive_asset)
+
+    @dg.asset(
+        key=pit_key(contract),
+        deps=[staged_key(contract)]
+        + ([archive_key(contract)] if contract.source.archive_backfill else []),
+        group_name=contract.domain,
+        description=(
+            f"{contract.title}: every version of every value and when it was known, "
+            "replayed from every raw file (direct downloads and archived copies)."
+        ),
+        owners=[f"team:{contract.owner}"],
+        tags=_tags(contract),
+        kinds={"duckdb"},
+        metadata={"table": pit.pit_table(contract)},
+    )
+    def pit_asset(store: DataStore) -> dg.MaterializeResult:
+        con = connect(store.path)
+        try:
+            summary = pit.build(con, contract, RawZone(store.path))
+        finally:
+            con.close()
+        summary["first_known_utc"] = summary["first_known_utc"].isoformat()
+        return dg.MaterializeResult(metadata=summary)
+
+    assets.append(pit_asset)
+    return assets
 
 
 def run_contract_checks(
@@ -237,10 +340,9 @@ def report_year(when: datetime) -> str:
 def _partitioned_schedule(contract: Contract) -> tuple[dg.UnresolvedAssetJobDefinition, Any]:
     job = dg.define_asset_job(
         name=f"refresh_{contract.id}",
-        selection=dg.AssetSelection.assets(
-            raw_key(contract), staged_key(contract), published_key(contract)
-        ),
-        description=f"Refresh: {contract.id} (the current year's file, staged, published)",
+        selection=dg.AssetSelection.assets(*refresh_keys(contract)),
+        description=f"Refresh: {contract.id} (the current year's file, then staged, "
+        "published and history)",
     )
 
     @dg.schedule(
@@ -276,7 +378,7 @@ def build_schedules(
         groups.setdefault((contract.schedule.cron, contract.schedule.timezone), []).append(contract)
 
     for (cron, timezone), members in sorted(groups.items()):
-        keys = [k for c in members for k in (raw_key(c), staged_key(c), published_key(c))]
+        keys = [k for c in members for k in refresh_keys(c)]
         job = dg.define_asset_job(
             name=schedule_job_name(cron, timezone),
             selection=dg.AssetSelection.assets(*keys),

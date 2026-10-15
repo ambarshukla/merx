@@ -5,6 +5,7 @@ uses them.
 
 | Term | Meaning |
 |---|---|
+| **As known at** | A dataset rebuilt exactly as it stood at a past moment, using only the versions known then. |
 | **Asset (Dagster)** | A dataset that Dagster knows how to build and tracks: here, a raw file (`raw/<id>`) or a staged table (`staged/<id>`). |
 | **Asset check (Dagster)** | A test attached to an asset, recorded with its result and evidence on every run. Each check in a contract becomes one. |
 | **Backwardation** | A forward curve where later delivery is cheaper than nearer delivery, usually a sign of tight supply. |
@@ -27,6 +28,7 @@ uses them.
 | **FOB (free on board)** | A price for a cargo at the point of loading, before shipping costs. |
 | **Freshness check** | Fails when the newest value in a dataset is older than a stated number of days. Looks at the data, not at the file's date. |
 | **Futures contract** | An exchange-traded agreement to buy or sell a set quantity of a commodity at a set price on a future date. |
+| **Capture time** | When a web archive took its copy of a file. For archived copies it stands in for knowledge time, as an upper bound on when the file was public. |
 | **Ground truth** | The record of what is actually wrong, against which detectors are scored. In the lab, the manifest of seeded defects. |
 | **Henry Hub** | A natural gas pipeline hub in Erath, Louisiana; its price is the main US natural gas benchmark. |
 | **Idempotent** | Running a step twice gives the same result as running it once. Staging is idempotent: it rebuilds the table from one raw file. |
@@ -51,6 +53,7 @@ uses them.
 | **Release calendar** | When a source publishes each update. EIA states the current and next release date inside each file. |
 | **Repeat share** | The share of exceptions that recur on a check that has failed before. A high share means fixes are not holding. |
 | **Resource (Dagster)** | A shared service an asset asks for by name, such as the downloader or the data store; tests swap in a fake. |
+| **Revision** | A published value replaced by a different one later, for the same date. A whole-history revision is usually a change of definition. |
 | **Root cause** | Why an exception happened, from a fixed list (source late, source format change, market event, pipeline bug and so on), assigned by a person. |
 | **Roll** | Moving from an expiring futures contract to the next one. A "generic" series such as front-month rolls by a stated rule. |
 | **Seeded defect** | A synthetic error deliberately injected into a copy of real data, and recorded, so detectors can be scored exactly. |
@@ -64,5 +67,8 @@ uses them.
 | **Swap dealer** | In the COT report, banks and dealers that use futures to hedge swaps they have written for clients. |
 | **Tier** | How critical a dataset is. Tier 1 gets blocking checks and immediate alerts; lower tiers get warnings and next-day review. |
 | **Time to recover** | How long an exception stayed open, from the first failing check to the first passing one. |
+| **Valid date** | The date a value describes, as opposed to when it became known (knowledge time). |
+| **Version (point-in-time)** | One value of one (measure, date) during the time it was current, from when it became known to when it was revised or withdrawn. |
+| **Wayback Machine** | The Internet Archive's public collection of dated copies of web pages and files. Used here to recover past versions of source files. |
 | **WTI (West Texas Intermediate)** | The main US crude oil price benchmark, priced at Cushing, Oklahoma. |
 | **Z-score** | How many typical deviations a value lies from normal. The robust version uses the median and MAD instead of the mean and standard deviation. |

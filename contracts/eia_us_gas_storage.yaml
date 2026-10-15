@@ -16,6 +16,8 @@ source:
   format: eia_hist_xls
   url: https://www.eia.gov/dnav/ng/hist_xls/NW2_EPG0_SWO_R48_BCFw.xls
   series_key: NW2_EPG0_SWO_R48_BCF
+  # Backfill history from dated copies in the Wayback Machine (probed 2026-10-15).
+  archive_backfill: true
 schedule:
   cron: "0 12 * * 4"
   timezone: America/New_York
