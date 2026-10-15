@@ -17,6 +17,7 @@ trustworthy.
 | Brent crude oil spot | EIA | daily | 1 |
 | Henry Hub natural gas spot | EIA | daily | 1 |
 | US crude oil stocks excluding the SPR | EIA | weekly | 1 |
+| US Lower 48 natural gas in storage | EIA | weekly | 1 |
 | WTI crude oil futures, contract 1 | EIA | daily (series ended 2024-04-05) | 3 |
 
 Each dataset is one YAML file in [`contracts/`](contracts/). A factory turns every
