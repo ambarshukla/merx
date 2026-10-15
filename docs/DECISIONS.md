@@ -131,3 +131,28 @@ need to know each dataset's columns).
 
 **Consequences.** Checks and detectors are written once for every dataset. Reading a
 whole report back in its published shape needs a pivot, which a published view can do.
+
+## D-007: Detectors are scored on seeded defects, and kept when they lose (2026-10-15)
+
+**Context.** Any anomaly detector can be made to look good by choosing its examples.
+The question that matters to an operations team is how many real kinds of error it
+finds and how many false alarms it costs, on real series.
+
+**Decision.** A lab (`merx.quality`) seeds five types of synthetic defect into copies of
+every staged series, with a ground-truth manifest, and scores each detector on recall
+(defects with at least one flag), precision (flags on seeded defects, with flags the
+detector also raises on the untouched series set aside as real-world alerts), and
+alerts per year on the untouched series. Detectors judge each value using only earlier
+values. Predictions are written before every run. Earlier detector versions stay in the
+results when a revision beats them, so the improvement is visible.
+
+**Alternatives considered.** Scoring on hand-picked known incidents (too few, and
+selected by hindsight); counting every flag on real data as false (punishes detectors
+for noticing real market events); tuning thresholds to the results (makes the numbers
+meaningless as a forecast).
+
+**Consequences.** The first run found two flaws in the first robust detector, fixed in
+v2. It also showed that the right detector depends on the series (seasonal series
+need a seasonal detector), so detector choice should become a contract field. Scores are
+an upper bound: real errors are messier than seeded ones. See
+[`DQ_LAB.md`](DQ_LAB.md).
