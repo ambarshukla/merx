@@ -7,6 +7,7 @@ tier: 1
 frequency: daily
 instrument: WTI_CUSHING_SPOT
 unit: USD/bbl
+measures: [price]
 source:
   provider: eia
   format: eia_hist_xls
@@ -17,7 +18,7 @@ schedule:
   timezone: America/New_York
 checks:
   - {type: not_null, column: value}
-  - {type: unique, columns: [valid_date]}
+  - {type: unique, columns: [measure, valid_date]}
   # Negative prices are real: WTI spot printed -36.98 on 2020-04-20. The floor is a
   # plausibility bound, not zero.
   - {type: range, column: value, min: -100, max: 300}

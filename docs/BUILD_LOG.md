@@ -73,3 +73,14 @@ How we will report time to onboard: as *what had to change* (files, lines, code 
 none). Wall-clock times would mostly measure who did the typing. A schedule test that
 listed exact schedule names had to change too; it now derives them from the
 contracts, so the next dataset will not touch it.
+
+## 2026-10-15: long form for every staged table
+
+Staged tables now have a `measure` column (D-006); each contract names its measures
+(`price`, `stocks`, `working_gas`). Reading a file is now a per-format reader in
+`merx.engine.formats`. Checks report the measure in their evidence, a range can be
+scoped to one measure, and freshness looks at the stalest measure. 47 tests.
+
+Live rerun of all six datasets: identical row counts, date ranges and extremes to the
+previous run, and the same single failing check (futures freshness, a warning).
+Prediction: identical. Matched.

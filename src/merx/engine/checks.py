@@ -1,7 +1,8 @@
 """Run a contract's checks against its staged table.
 
 Each check returns an outcome with enough evidence (counts and example rows) for a person
-to see why it failed without rerunning anything.
+to see why it failed without rerunning anything. Tables are in long form, so examples
+name the measure as well as the date.
 """
 
 from dataclasses import dataclass, field
@@ -22,25 +23,23 @@ class CheckOutcome:
 
 
 def _not_null(con: duckdb.DuckDBPyConnection, table: str, check: NotNullCheck) -> CheckOutcome:
-    null_dates = [
-        d
-        for (d,) in con.execute(
-            f"SELECT valid_date FROM {table} WHERE {check.column} IS NULL ORDER BY valid_date"
-        ).fetchall()
-    ]
+    nulls = con.execute(
+        f"SELECT measure, valid_date FROM {table} WHERE {check.column} IS NULL "
+        "ORDER BY valid_date, measure"
+    ).fetchall()
     allowed = set(check.allow)
-    unexpected = [d for d in null_dates if d not in allowed]
+    unexpected = [(m, d) for m, d in nulls if d not in allowed]
     # An accepted gap that has since been filled is worth knowing about: the exception
     # in the contract can be removed.
-    filled = sorted(allowed - set(null_dates))
+    filled = sorted(allowed - {d for _, d in nulls})
     return CheckOutcome(
         passed=not unexpected,
         description=f"{len(unexpected)} unexpected gaps in {check.column}"
-        + (f" ({len(null_dates) - len(unexpected)} accepted)" if allowed else ""),
+        + (f" ({len(nulls) - len(unexpected)} accepted)" if allowed else ""),
         metadata={
             "unexpected_nulls": len(unexpected),
-            "accepted_nulls": len(null_dates) - len(unexpected),
-            "examples": [d.isoformat() for d in unexpected[:_EXAMPLES]],
+            "accepted_nulls": len(nulls) - len(unexpected),
+            "examples": [[m, d.isoformat()] for m, d in unexpected[:_EXAMPLES]],
             "accepted_gaps_now_filled": [d.isoformat() for d in filled],
         },
     )
@@ -62,10 +61,13 @@ def _unique(con: duckdb.DuckDBPyConnection, table: str, check: UniqueCheck) -> C
 
 
 def _range(con: duckdb.DuckDBPyConnection, table: str, check: RangeCheck) -> CheckOutcome:
+    scope = "" if check.measure is None else "AND measure = ? "
+    params = [check.min, check.max] + ([] if check.measure is None else [check.measure])
     outside = con.execute(
-        f"SELECT valid_date, {check.column} FROM {table} "
-        f"WHERE {check.column} < ? OR {check.column} > ? ORDER BY valid_date",
-        [check.min, check.max],
+        f"SELECT measure, valid_date, {check.column} FROM {table} "
+        f"WHERE ({check.column} < ? OR {check.column} > ?) {scope}"
+        "ORDER BY valid_date, measure",
+        params,
     ).fetchall()
     return CheckOutcome(
         passed=not outside,
@@ -74,7 +76,8 @@ def _range(con: duckdb.DuckDBPyConnection, table: str, check: RangeCheck) -> Che
             "outside": len(outside),
             "min_allowed": check.min,
             "max_allowed": check.max,
-            "examples": [[d.isoformat(), v] for d, v in outside[:_EXAMPLES]],
+            "measure": check.measure or "all",
+            "examples": [[m, d.isoformat(), v] for m, d, v in outside[:_EXAMPLES]],
         },
     )
 
@@ -82,17 +85,22 @@ def _range(con: duckdb.DuckDBPyConnection, table: str, check: RangeCheck) -> Che
 def _freshness(
     con: duckdb.DuckDBPyConnection, table: str, check: FreshnessCheck, today: date
 ) -> CheckOutcome:
-    (latest,) = con.execute(
-        f"SELECT max(valid_date) FROM {table} WHERE value IS NOT NULL"
-    ).fetchone()
-    if latest is None:
+    # Every measure must be fresh, so the dataset is as fresh as its stalest measure.
+    latest = con.execute(
+        f"SELECT measure, max(valid_date) FROM {table} WHERE value IS NOT NULL "
+        "GROUP BY measure ORDER BY 2, 1"
+    ).fetchall()
+    if not latest:
         return CheckOutcome(False, "no values at all", {"latest_valid_date": None})
-    age = (today - latest).days
+    stalest_measure, stalest = latest[0]
+    age = (today - stalest).days
     return CheckOutcome(
         passed=age <= check.max_age_days,
-        description=f"newest value is {age} days old (limit {check.max_age_days})",
+        description=f"newest value is {age} days old (limit {check.max_age_days})"
+        + (f" for measure {stalest_measure}" if len(latest) > 1 else ""),
         metadata={
-            "latest_valid_date": latest.isoformat(),
+            "latest_valid_date": stalest.isoformat(),
+            "stalest_measure": stalest_measure,
             "age_days": age,
             "max_age_days": check.max_age_days,
             "as_of": today.isoformat(),

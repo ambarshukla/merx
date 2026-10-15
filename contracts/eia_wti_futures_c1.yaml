@@ -10,6 +10,7 @@ tier: 3
 frequency: daily
 instrument: WTI_NYMEX_C1
 unit: USD/bbl
+measures: [price]
 source:
   provider: eia
   format: eia_hist_xls
@@ -20,6 +21,6 @@ schedule:
   timezone: America/New_York
 checks:
   - {type: not_null, column: value}
-  - {type: unique, columns: [valid_date]}
+  - {type: unique, columns: [measure, valid_date]}
   - {type: range, column: value, min: -100, max: 300}
   - {type: freshness, max_age_days: 10, severity: warn}
