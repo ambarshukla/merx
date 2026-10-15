@@ -1,0 +1,23 @@
+# Brent crude oil spot price: the main international crude benchmark.
+id: eia_brent_spot
+title: Brent crude oil spot price, Europe, daily
+domain: oil
+owner: oil-data-steward
+tier: 1
+frequency: daily
+instrument: BRENT_SPOT
+unit: USD/bbl
+source:
+  provider: eia
+  format: eia_hist_xls
+  url: https://www.eia.gov/dnav/pet/hist_xls/RBRTEd.xls
+  series_key: RBRTE
+schedule:
+  cron: "30 18 * * 1-5"
+  timezone: America/New_York
+checks:
+  - {type: not_null, column: value}
+  - {type: unique, columns: [valid_date]}
+  # Brent has never printed below zero; a negative value here would be a defect.
+  - {type: range, column: value, min: 0, max: 300}
+  - {type: freshness, max_age_days: 10}

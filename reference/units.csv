@@ -1,0 +1,5 @@
+unit_id,description,quantity
+USD/bbl,US dollars per barrel (one barrel = 42 US gallons),price
+USD/MMBtu,US dollars per million British thermal units,price
+kbbl,thousand barrels,volume
+contracts,number of futures contracts,count
