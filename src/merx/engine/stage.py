@@ -46,29 +46,34 @@ def staged_table(contract: Contract) -> str:
 def stage(
     contract: Contract,
     instrument_id: str,
-    landed: LandedFile,
-    read: ReadResult,
+    parts: list[tuple[LandedFile, ReadResult]],
     data_dir: Path,
 ) -> StageResult:
-    obs = read.observations
-    if not obs:
-        raise ValueError(f"{contract.id}: raw file {landed.path} has no observations")
-    unexpected = {m for m, _, _ in obs} - set(contract.measures)
+    """Rebuild the staged table from one raw file, or from one file per partition."""
+    rows_in: list[tuple[str, date, float | None, LandedFile]] = [
+        (m, d, v, landed) for landed, read in parts for m, d, v in read.observations
+    ]
+    if not rows_in:
+        paths = [landed.path for landed, _ in parts]
+        raise ValueError(f"{contract.id}: raw files {paths} hold no observations")
+    unexpected = {m for m, _, _, _ in rows_in} - set(contract.measures)
     if unexpected:
         raise ValueError(f"{contract.id}: file produced undeclared measures {sorted(unexpected)}")
-    n = len(obs)
+    n = len(rows_in)
     table = pa.table(
         {
             "dataset_id": [contract.id] * n,
             "series_key": [contract.source.series_key] * n,
             "instrument_id": [instrument_id] * n,
-            "measure": [m for m, _, _ in obs],
-            "valid_date": pa.array([d for _, d, _ in obs], pa.date32()),
-            "value": pa.array([v for _, _, v in obs], pa.float64()),
+            "measure": [m for m, _, _, _ in rows_in],
+            "valid_date": pa.array([d for _, d, _, _ in rows_in], pa.date32()),
+            "value": pa.array([v for _, _, v, _ in rows_in], pa.float64()),
             "unit": [contract.unit] * n,
-            "knowledge_time_utc": pa.array([landed.fetched_at_utc] * n, pa.timestamp("us")),
-            "raw_sha256": [landed.sha256] * n,
-            "raw_path": [landed.path] * n,
+            "knowledge_time_utc": pa.array(
+                [f.fetched_at_utc for _, _, _, f in rows_in], pa.timestamp("us")
+            ),
+            "raw_sha256": [f.sha256 for _, _, _, f in rows_in],
+            "raw_path": [f.path for _, _, _, f in rows_in],
         }
     )
     name = staged_table(contract)
@@ -78,7 +83,9 @@ def stage(
         con.execute(
             f"CREATE OR REPLACE TABLE {name} AS SELECT * FROM incoming ORDER BY measure, valid_date"
         )
-        if read.release_date is not None and read.next_release_date is not None:
+        for landed, read in parts:
+            if read.release_date is None or read.next_release_date is None:
+                continue
             con.execute(_RELEASE_LOG_DDL)
             con.execute(
                 "INSERT OR IGNORE INTO meta.release_log VALUES (?, ?, ?, ?, ?)",

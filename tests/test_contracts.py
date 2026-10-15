@@ -139,3 +139,37 @@ def test_unique_check_must_include_the_date(tmp_path):
     )
     with pytest.raises(ContractError, match="must include valid_date"):
         load_contract(write(tmp_path, "t", text))
+
+
+CFTC = (Path(__file__).parents[1] / "contracts" / "cftc_wti_positions.yaml").read_text(
+    encoding="utf-8"
+)
+
+
+def cftc_variant(tmp_path, old: str, new: str):
+    text = CFTC.replace("id: cftc_wti_positions", "id: t")
+    assert old in text
+    return load_contract(write(tmp_path, "t", text.replace(old, new, 1)))
+
+
+def test_year_placeholder_needs_partitions(tmp_path):
+    with pytest.raises(ContractError, match="go together"):
+        cftc_variant(tmp_path, "  partitions: {by: year, start: 2010}\n", "")
+
+
+def test_columns_must_map_every_measure(tmp_path):
+    with pytest.raises(ContractError, match="map every measure"):
+        cftc_variant(tmp_path, "    swap_spread: Swap__Positions_Spread_All\n", "")
+
+
+def test_single_series_format_takes_no_columns(tmp_path):
+    text = VALID.format(id="t").replace(
+        "  series_key: RWTC\n", "  series_key: RWTC\n  columns: {price: Value}\n"
+    )
+    with pytest.raises(ContractError, match="takes no columns"):
+        load_contract(write(tmp_path, "t", text))
+
+
+def test_balance_check_on_unknown_measure_is_rejected(tmp_path):
+    with pytest.raises(ContractError, match="unknown measures"):
+        cftc_variant(tmp_path, "    total: open_interest\n", "    total: open_interests\n")

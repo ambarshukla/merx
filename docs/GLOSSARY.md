@@ -8,11 +8,13 @@ uses them.
 | **Asset (Dagster)** | A dataset that Dagster knows how to build and tracks: here, a raw file (`raw/<id>`) or a staged table (`staged/<id>`). |
 | **Asset check (Dagster)** | A test attached to an asset, recorded with its result and evidence on every run. Each check in a contract becomes one. |
 | **Backwardation** | A forward curve where later delivery is cheaper than nearer delivery, usually a sign of tight supply. |
+| **Balance check** | A check that an accounting identity holds on every date, e.g. open interest equals all long positions plus spreads. |
 | **Bcf** | Billion cubic feet, the unit for US natural gas volumes such as gas in storage. |
 | **Bitemporal** | Storing two times per fact: when it applied (valid time) and when we learned it (knowledge time). |
 | **Blocking check** | An asset check whose failure stops anything downstream in the same run. Here: error-severity checks on tier 1 datasets. |
 | **Brent** | The main international crude oil price benchmark, originally for oil from the North Sea. |
 | **CFTC (Commodity Futures Trading Commission)** | The US regulator of futures markets. Publishes weekly reports of who holds futures positions. |
+| **COT (Commitments of Traders)** | The CFTC's weekly report of futures positions by type of trader, as of Tuesday and published the following Friday. |
 | **Contango** | A forward curve where later delivery costs more than nearer delivery, usually a sign of ample supply and storage. |
 | **Contract 1 (front month)** | The futures contract nearest to expiry. "Contract 1" is a series that rolls to the next contract as each one expires. |
 | **Crosswalk** | A table that maps each provider's identifier for something onto our own identifier, so data is joined on codes, not on names that can change. |
@@ -29,12 +31,17 @@ uses them.
 | **Knowledge time** | The moment a value became known to us. Used to rebuild history "as known then". |
 | **Long form** | A table shape with one row per (measure, date) and a single value column, rather than one column per measure. |
 | **MAD (median absolute deviation)** | A robust measure of spread: the median of the distances from the median. Unlike standard deviation, one spike does not distort it. |
+| **Managed money** | In the COT report, funds that trade futures for clients: hedge funds and commodity trading advisers. |
 | **Manifest** | The table recording every raw download: where it came from, when, its hash and size. |
 | **Measure** | One named number a dataset reports per date, e.g. `price`, or `managed_money_long` in a positioning report. |
 | **MMBtu** | One million British thermal units, the standard unit for pricing natural gas in the US. |
+| **Non-reportable positions** | Positions of traders too small to be reported individually; the CFTC derives them as the remainder of open interest. |
 | **NYMEX (New York Mercantile Exchange)** | The exchange where WTI crude oil and Henry Hub natural gas futures trade. |
+| **Open interest** | The number of futures contracts open at a point in time. Each has a long and a short side. |
+| **Partition** | One slice of a dataset that is fetched and tracked on its own, such as one year of a source published as yearly files. |
 | **PRA (price reporting agency)** | An organisation that assesses physical commodity prices from market evidence, for example Platts or Argus. |
 | **Precision** | Of the values a detector flags, the share that are truly wrong. Low precision means wasted reviewer time. |
+| **Producer/merchant** | In the COT report, companies that produce, process or use the physical commodity and use futures to hedge. |
 | **Quarantine (detector)** | A flagged value is not used as the reference or in the yardstick for judging later values, so one bad value cannot distort the next judgements. |
 | **Raw zone (landing zone)** | Where downloads are stored exactly as received, never edited. Everything downstream is rebuilt from it. |
 | **Recall** | Of the values that are truly wrong, the share a detector flags. Low recall means errors reach users. |
@@ -46,8 +53,10 @@ uses them.
 | **SHA-256** | A fingerprint of a file's bytes. Identical files share it; any change gives a different one. |
 | **Spot price** | The price for a commodity delivered now (within days), as opposed to a futures price for later delivery. |
 | **SPR (Strategic Petroleum Reserve)** | The US government's emergency crude oil stockpile, reported separately from commercial stocks. |
+| **Spread position** | Holding both a long and a short futures position (e.g. in different months). Counted on both sides of open interest. |
 | **Staged table** | The typed, checked version of one dataset (`staged.<id>` in DuckDB), with each row linked to the raw file it came from. |
 | **Stale run (stuck feed)** | The same value repeated where it should have changed, usually because a feed stopped updating. |
+| **Swap dealer** | In the COT report, banks and dealers that use futures to hedge swaps they have written for clients. |
 | **Tier** | How critical a dataset is. Tier 1 gets blocking checks and immediate alerts; lower tiers get warnings and next-day review. |
 | **WTI (West Texas Intermediate)** | The main US crude oil price benchmark, priced at Cushing, Oklahoma. |
 | **Z-score** | How many typical deviations a value lies from normal. The robust version uses the median and MAD instead of the mean and standard deviation. |

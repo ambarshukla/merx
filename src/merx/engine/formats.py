@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from merx.contracts import Contract
-from merx.sources import eia_xls
+from merx.sources import cftc, eia_xls
 
 Observation = tuple[str, date, float | None]
 
@@ -20,6 +20,8 @@ class ReadResult:
     observations: list[Observation]
     release_date: date | None = None
     next_release_date: date | None = None
+    # The provider's display names for the series in this file (names drift; codes do not).
+    source_labels: tuple[str, ...] = ()
 
 
 def _read_eia_hist_xls(content: bytes, contract: Contract) -> ReadResult:
@@ -32,8 +34,15 @@ def _read_eia_hist_xls(content: bytes, contract: Contract) -> ReadResult:
     )
 
 
+def _read_cftc_disaggregated(content: bytes, contract: Contract) -> ReadResult:
+    assert contract.source.columns is not None  # guaranteed by the contract schema
+    parsed = cftc.parse(content, contract.source.series_key, contract.source.columns)
+    return ReadResult(observations=parsed.observations, source_labels=tuple(parsed.market_names))
+
+
 READERS: dict[str, Callable[[bytes, Contract], ReadResult]] = {
     "eia_hist_xls": _read_eia_hist_xls,
+    "cftc_disaggregated": _read_cftc_disaggregated,
 }
 
 

@@ -6,3 +6,4 @@ eia,RCLC1,WTI_NYMEX_C1,"Cushing, OK Crude Oil Future Contract 1 (Dollars per Bar
 eia,WCESTUS1,US_CRUDE_STOCKS_EX_SPR,Weekly U.S. Ending Stocks excluding SPR of Crude Oil (Thousand Barrels),
 cftc,067651,WTI_NYMEX_FUTURES,WTI-PHYSICAL - NEW YORK MERCANTILE EXCHANGE,Join on the contract market code: the display name of this market has changed over time
 eia,NW2_EPG0_SWO_R48_BCF,US_L48_GAS_STORAGE,Weekly Lower 48 States Natural Gas Working Underground Storage (Billion Cubic Feet),
+cftc,023651,HENRY_HUB_NYMEX_FUTURES,NAT GAS NYME - NEW YORK MERCANTILE EXCHANGE,Join on the contract market code
