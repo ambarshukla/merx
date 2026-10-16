@@ -6,6 +6,7 @@
     merx accept-withdrawals DATASET --reason "..."
     merx revisions DATASET                  every revised value
     merx as-known-at DATASET 2018-01-01     the dataset as it stood at that moment
+    merx serve                              the consoles at http://127.0.0.1:8000
 
 Everything else (fetching, staging, checks, publishing) runs in Dagster.
 """
@@ -57,7 +58,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("dataset")
     p.add_argument("when", help="UTC date or date-time, e.g. 2018-01-01 or 2018-01-01T12:00")
     p.add_argument("--limit", type=int, default=20)
+    p = sub.add_parser("serve")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
+
+    if args.command == "serve":
+        # Before opening the database: the consoles only ever read it, briefly.
+        import uvicorn
+
+        from merx.api import create_app
+
+        print(f"merx consoles: http://{args.host}:{args.port}/client and /ops")
+        uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+        return 0
 
     con = connect(data_dir())
     try:

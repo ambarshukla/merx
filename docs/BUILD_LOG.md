@@ -249,3 +249,29 @@ including one that checks the key is in neither the manifest nor any raw file.
 
 WTI spot stays blocked at the gate (D-011) until someone decides between accepting the
 744 losses and repairing them from the API.
+
+## 2026-10-16: the operations console and the client view
+
+**Built.** `merx.api`: a FastAPI app (D-013) with `/ops` and `/client`, a read-only JSON
+API under `/api` (documented at `/api/docs`), a dependency-free SVG line chart, and
+`merx serve`. 119 tests, including one that the client cannot read unpublished data and
+one that an empty data directory is read without being created.
+
+**Ops console** (`/ops`): nine datasets; seven published and passing, one published with
+a warning (futures, stale), one blocked (WTI spot, 744 missing values); two open
+exceptions with owners and root causes; 142 raw files kept (93.1 MB). Selecting a
+dataset shows its checks on the current build, the values the history knows and the
+build lacks, and its reconciliation breaks.
+
+**Client view** (`/client`): only published series, each with its quality status. WTI
+spot shows its last passing publication with a note that newer data is held back. "As
+known on" overlays the series as it stood on any date: US crude stocks as known on
+2016-06-01 sit about 20 million barrels above today's values all the way back to 2011,
+the 2016 redefinition made visible. A revisions table lists every changed or removed
+value. Links can carry the series and date, e.g.
+`/client?dataset=eia_us_crude_stocks&asof=2016-06-01`.
+
+**Found while building.** "As known on 2015-01-01" for crude stocks only reached
+2012-11-30: the archive holds no copies from 2013 or 2014, so nothing newer was known to
+the history then. Correct, but a reminder that archive-based history is only as dense as
+the archive's copies.

@@ -287,3 +287,27 @@ row counts only (a count says nothing about which dates, or whether values agree
 The reconciliation is a warning-level check, not part of the publish gate: it informs a
 decision rather than making it. Which channel to trust for which dates is now a choice
 with evidence behind it.
+
+## D-013: The consoles are FastAPI with plain HTML and JavaScript (2026-10-16)
+
+**Context.** The platform needs two front ends: an operations console for the people
+running the data, and a client view for the people using it. The original plan was
+React with TypeScript, built with Vite.
+
+**Decision.** One FastAPI app serves a read-only JSON API and two pages written in plain
+HTML and JavaScript, with a small hand-written SVG chart. No build step, no Node
+toolchain, no runtime downloads from a CDN. The client endpoints read only the published
+layer (and the point-in-time history for "as known on"); the ops endpoints read
+everything. Nothing in the web app writes: decisions are made with the `merx` command,
+which records them. Database connections are read-only, opened per request, and
+retried briefly while a pipeline run is writing.
+
+**Alternatives considered.** React and Vite (a richer component model, but Vite depends
+on a native build binary installed inside the project, the kind of non-standard-path
+executable this development machine's application control blocks, and a build step for
+two pages is more machinery than they need); server-side templates (fine, but the JSON
+API is useful on its own and easy to test).
+
+**Consequences.** The consoles run anywhere Python runs, from `merx serve`. If they grow
+past a few pages, a component framework becomes worth its build step; the JSON API would
+not change.

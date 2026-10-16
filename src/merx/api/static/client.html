@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>merx · data</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>merx</h1><span class="sub">published commodity data, with its history</span>
+  <nav><a class="here" href="/client">Data</a><a href="/ops">Operations</a></nav>
+</header>
+<main>
+  <section>
+    <div class="row">
+      <label>Series <select id="dataset"></select></label>
+      <label id="measure-wrap">Measure <select id="measure"></select></label>
+      <span class="row" id="ranges">
+        <button data-years="1">1Y</button><button data-years="5">5Y</button>
+        <button data-years="15">15Y</button><button data-years="0">All</button>
+      </span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="row" style="justify-content: space-between">
+      <div>
+        <h2 id="title" style="margin-bottom:2px"></h2>
+        <div class="small muted" id="meta"></div>
+      </div>
+      <div id="status"></div>
+    </div>
+    <div id="held" class="note small" style="display:none; margin-top:10px"></div>
+    <div class="row" style="margin-top:12px">
+      <label>As known on <input type="date" id="asof"></label>
+      <span class="small muted" id="presets"></span>
+      <button id="clear-asof">Clear</button>
+    </div>
+    <div class="legend" id="legend" style="margin-top:10px"></div>
+    <div class="chart" id="chart"></div>
+    <div class="small muted" id="asof-note"></div>
+  </section>
+
+  <section class="grid">
+    <div class="panel">
+      <h2>Revisions and withdrawals</h2>
+      <div class="small muted" style="margin-bottom:8px">
+        Values the source has changed or removed since they were first known. Every
+        version is kept; nothing is overwritten.
+      </div>
+      <div id="revisions"></div>
+    </div>
+    <div class="panel">
+      <h2>About this data</h2>
+      <div class="small">
+        <p>Only the <b>published</b> layer is shown here: data that passed the publish
+          gate. Tier 1 series are published only when no critical check fails; other
+          tiers are published marked <span class="badge warn">warn</span>.</p>
+        <p><b>As known on</b> rebuilds the series exactly as it stood on that date, from
+          every version in the history. Before this project began downloading
+          (2026-10-15), versions come from dated copies in the Internet Archive's Wayback
+          Machine, counted from the archive's capture time: an upper bound on when they
+          were public.</p>
+        <p>All data is from public sources (U.S. EIA, U.S. CFTC). See the project's
+          PROVENANCE document.</p>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="/static/chart.js"></script>
+<script>
+"use strict";
+const PRESETS = {
+  eia_us_crude_stocks: [["2016-06-01", "before the 2016 redefinition"]],
+  eia_us_gas_storage: [["2018-01-01", "before the 2017 revisions were known"]],
+  eia_wti_spot: [["2026-09-10", "before 744 values were dropped"]],
+};
+let catalog = [], current = null, years = 15;
+
+function since(yearsBack, last) {
+  if (!yearsBack) return null;
+  const d = new Date(last + "T00:00:00Z");
+  d.setUTCFullYear(d.getUTCFullYear() - yearsBack);
+  return d.toISOString().slice(0, 10);
+}
+
+async function load() {
+  catalog = await getJSON("/api/client/datasets");
+  const sel = document.getElementById("dataset");
+  sel.innerHTML = catalog.map((c) => `<option value="${c.id}">${esc(c.title)}</option>`).join("");
+  const start = new URLSearchParams(location.search).get("dataset") || "eia_us_crude_stocks";
+  if (catalog.some((c) => c.id === start)) sel.value = start;
+  sel.onchange = () => select(sel.value);
+  document.querySelectorAll("#ranges button").forEach((b) =>
+    (b.onclick = () => { years = +b.dataset.years; draw(); }));
+  document.getElementById("asof").onchange = draw;
+  document.getElementById("measure").onchange = draw;
+  document.getElementById("clear-asof").onclick = () => {
+    document.getElementById("asof").value = ""; draw();
+  };
+  window.addEventListener("resize", () => current && draw());
+  select(sel.value);
+}
+
+function select(id) {
+  current = catalog.find((c) => c.id === id);
+  if (!current) return;
+  const m = document.getElementById("measure");
+  m.innerHTML = current.measures.map((x) => `<option>${x}</option>`).join("");
+  document.getElementById("measure-wrap").style.display = current.measures.length > 1 ? "" : "none";
+  document.getElementById("title").textContent = current.title;
+  document.getElementById("meta").textContent =
+    `${current.unit} · ${current.frequency} · ${current.first_date} to ${current.last_date} · ` +
+    `published ${current.published_at_utc?.slice(0, 16).replace("T", " ")} UTC`;
+  document.getElementById("status").innerHTML = badge(current.quality_status);
+  const held = document.getElementById("held");
+  if (current.latest_attempt && current.latest_attempt === "blocked") {
+    held.style.display = "";
+    held.innerHTML = `Newer data for this series is being <b>held back</b>: the latest
+      update (${current.latest_attempt_utc.slice(0, 16).replace("T", " ")} UTC) failed a
+      critical check and was not published. What you see is the last publication that
+      passed.`;
+  } else held.style.display = "none";
+  const presets = PRESETS[id] || [];
+  document.getElementById("presets").innerHTML = presets.map(([d, why]) =>
+    `<a href="#" data-d="${d}">${d}</a> (${why})`).join(" · ");
+  document.querySelectorAll("#presets a").forEach((a) => (a.onclick = (e) => {
+    e.preventDefault(); document.getElementById("asof").value = a.dataset.d; draw();
+  }));
+  // A link can carry a date: /client?dataset=eia_us_crude_stocks&asof=2016-06-01
+  const linked = new URLSearchParams(location.search);
+  document.getElementById("asof").value =
+    linked.get("dataset") === id && linked.get("asof") ? linked.get("asof") : "";
+  draw();
+}
+
+async function draw() {
+  const measure = document.getElementById("measure").value || current.measures[0];
+  const start = since(years, current.last_date);
+  const q = new URLSearchParams({ measure, ...(start ? { start } : {}) });
+  const pub = await getJSON(`/api/client/series/${current.id}?${q}`);
+  const series = [{ name: "published", color: "var(--accent)", points: pub.points }];
+  const asof = document.getElementById("asof").value;
+  const note = document.getElementById("asof-note");
+  note.textContent = "";
+  if (asof) {
+    const h = await getJSON(`/api/client/series/${current.id}/as-known-at?` +
+      new URLSearchParams({ measure, at: asof + "T00:00:00" }));
+    const pts = start ? h.points.filter(([d]) => d >= start) : h.points;
+    series.push({ name: `as known on ${asof}`, color: "var(--accent-2)", dash: "5 3", points: pts });
+    note.textContent = h.points.length
+      ? `${h.points.length} values were known on ${asof}. ${h.basis}.`
+      : `Nothing in the history was known on ${asof}.`;
+  }
+  // CSS variables do not resolve inside SVG attributes in every browser: resolve them.
+  const css = getComputedStyle(document.documentElement);
+  series.forEach((s) => (s.color = s.color.startsWith("var(")
+    ? css.getPropertyValue(s.color.slice(4, -1)).trim() : s.color));
+  document.getElementById("legend").innerHTML = series.map((s) =>
+    `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("");
+  lineChart(document.getElementById("chart"), series, { unit: pub.unit });
+
+  const rev = await getJSON(`/api/client/series/${current.id}/revisions?measure=${measure}`);
+  document.getElementById("revisions").innerHTML = rev.length ? `
+    <table><thead><tr><th>Date</th><th class="num">First</th><th class="num">Now</th>
+      <th class="num">Versions</th><th>First changed</th></tr></thead><tbody>
+    ${rev.slice(0, 60).map((r) => `<tr><td>${r.valid_date}</td>
+      <td class="num">${r.first_value ?? "–"}</td>
+      <td class="num">${!r.present_now ? '<span class="badge fail">removed</span>' : (r.latest_value ?? "–")}</td>
+      <td class="num">${r.versions}</td><td>${(r.first_changed_utc || "").slice(0, 10)}</td></tr>`).join("")}
+    </tbody></table>${rev.length > 60 ? `<div class="small muted">… and more (${rev.length} shown max 200)</div>` : ""}`
+    : `<div class="muted small">No revisions in the history for this series.</div>`;
+}
+
+load().catch((e) => { document.querySelector("main").innerHTML = `<pre>${esc(e)}</pre>`; });
+</script>
+</body>
+</html>

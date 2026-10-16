@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>merx · operations</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>merx</h1><span class="sub">operations console</span>
+  <nav><a href="/client">Data</a><a class="here" href="/ops">Operations</a></nav>
+</header>
+<main>
+  <section class="panel"><div class="kpis" id="kpis"></div></section>
+
+  <section class="panel">
+    <h2>Datasets</h2>
+    <div class="small muted" style="margin-bottom:8px">
+      Click a dataset for its checks, missing values and reconciliation. Publication is
+      the publish gate's latest decision.
+    </div>
+    <div id="datasets"></div>
+  </section>
+
+  <section class="panel" id="detail" style="display:none">
+    <h2 id="detail-title"></h2>
+    <div class="grid">
+      <div><h2 class="small muted">Checks on the current build</h2><div id="checks"></div></div>
+      <div>
+        <h2 class="small muted">Values known before, missing now</h2><div id="missing"></div>
+        <h2 class="small muted" style="margin-top:16px">Reconciliation</h2><div id="recon"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Exceptions</h2>
+    <div class="small muted" style="margin-bottom:8px">
+      A failing check opens an exception for its owner; a passing check closes it. Root
+      causes are assigned with <code>merx assign-root-cause</code>.
+    </div>
+    <div id="exceptions"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Detector bake-off</h2>
+    <div class="small muted" style="margin-bottom:8px">
+      Recall and precision on seeded defects in the real series; alerts per year on the
+      untouched data. Full write-up: <code>docs/DQ_LAB.md</code>.
+    </div>
+    <div id="lab"></div>
+  </section>
+</main>
+<script src="/static/chart.js"></script>
+<script>
+"use strict";
+const pct = (v) => (v === null || v === undefined ? "–" : Math.round(v * 100) + "%");
+const when = (s) => (s ? s.slice(0, 16).replace("T", " ") : "–");
+const mb = (b) => (b / 1e6).toFixed(1) + " MB";
+
+async function load() {
+  const [datasets, exceptions, lab] = await Promise.all([
+    getJSON("/api/ops/datasets"), getJSON("/api/ops/exceptions"), getJSON("/api/ops/lab"),
+  ]);
+  const count = (s) => datasets.filter((d) => d.publication === s).length;
+  const open = exceptions.filter((e) => !e.closed_at_utc).length;
+  const kpi = (v, l) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  document.getElementById("kpis").innerHTML = [
+    kpi(datasets.length, "datasets"),
+    kpi(count("pass"), "published, passing"),
+    kpi(count("warn"), "published with warnings"),
+    kpi(count("blocked"), "blocked at the gate"),
+    kpi(open, "open exceptions"),
+    kpi(datasets.reduce((a, d) => a + d.raw_files, 0), "raw files kept"),
+    kpi(mb(datasets.reduce((a, d) => a + (d.raw_bytes || 0), 0)), "raw data"),
+  ].join("");
+
+  document.getElementById("datasets").innerHTML = `<table><thead><tr>
+    <th>Dataset</th><th>Tier</th><th>Owner</th><th>Publication</th><th class="num">Rows</th>
+    <th>Newest value</th><th>Last fetched (UTC)</th><th class="num">Open exc.</th></tr></thead><tbody>
+    ${datasets.map((d) => `<tr class="clickable" data-id="${d.id}">
+      <td><b>${esc(d.id)}</b><div class="small muted">${esc(d.title)}</div></td>
+      <td>${d.tier}</td><td class="small">${esc(d.owner)}</td>
+      <td>${badge(d.publication)}${d.failed_checks.length
+        ? `<div class="small muted">${d.failed_checks.map(esc).join(", ")}</div>` : ""}</td>
+      <td class="num">${d.rows?.toLocaleString() ?? "–"}</td>
+      <td>${d.last_valid_date ?? "–"}</td><td class="small">${when(d.last_fetched_utc)}</td>
+      <td class="num">${d.open_exceptions || ""}</td></tr>`).join("")}</tbody></table>`;
+  document.querySelectorAll("#datasets tr.clickable").forEach((tr) => (tr.onclick = () => {
+    document.querySelectorAll("#datasets tr").forEach((r) => r.classList.remove("selected"));
+    tr.classList.add("selected");
+    detail(tr.dataset.id);
+  }));
+
+  document.getElementById("exceptions").innerHTML = exceptions.length ? `<table><thead><tr>
+    <th>#</th><th>Dataset</th><th>Check</th><th>Owner</th><th>Opened</th><th>Closed</th>
+    <th class="num">Seen</th><th>Root cause</th><th>Latest</th></tr></thead><tbody>
+    ${exceptions.map((e) => `<tr><td>${e.id}</td><td>${esc(e.dataset)}</td><td>${esc(e.check)}</td>
+      <td class="small">${esc(e.owner)}</td><td class="small">${when(e.opened_at_utc)}</td>
+      <td class="small">${e.closed_at_utc ? when(e.closed_at_utc) : '<span class="badge fail">open</span>'}</td>
+      <td class="num">${e.occurrences}</td>
+      <td>${e.root_cause ? `<b>${esc(e.root_cause)}</b>` : '<span class="muted">unassigned</span>'}
+        ${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ""}</td>
+      <td class="small">${esc(e.last_description)}</td></tr>`).join("")}</tbody></table>`
+    : '<div class="muted small">No exceptions.</div>';
+
+  document.getElementById("lab").innerHTML = lab.length ? `<table><thead><tr><th>Detector</th>
+    <th class="num">Recall</th><th class="num">Precision</th><th class="num">Alerts / yr</th></tr></thead>
+    <tbody>${lab.map((r) => `<tr><td>${esc(r.detector)}</td><td class="num">${pct(r.recall)}</td>
+      <td class="num">${pct(r.precision)}</td><td class="num">${r.alerts_per_year.toFixed(1)}</td></tr>`).join("")}
+    </tbody></table>` : '<div class="muted small">The lab has not been run yet.</div>';
+
+  const first = datasets.find((d) => d.publication === "blocked") || datasets[0];
+  if (first) document.querySelector(`#datasets tr[data-id="${first.id}"]`).click();
+}
+
+async function detail(id) {
+  const d = await getJSON(`/api/ops/datasets/${id}`);
+  document.getElementById("detail").style.display = "";
+  document.getElementById("detail-title").textContent = id;
+  document.getElementById("checks").innerHTML = d.checks.length ? `<table><thead><tr>
+    <th>Check</th><th>Severity</th><th>Result</th></tr></thead><tbody>
+    ${d.checks.map((c) => `<tr><td>${esc(c.check)}</td><td class="small">${c.severity}</td>
+      <td>${c.passed ? '<span class="badge pass">pass</span>' : '<span class="badge fail">fail</span>'}
+      <div class="small muted">${esc(c.description)}</div></td></tr>`).join("")}</tbody></table>`
+    : '<div class="muted small">No checks recorded yet.</div>';
+  const m = d.missing;
+  document.getElementById("missing").innerHTML = m.missing
+    ? `<div><b>${m.missing.toLocaleString()}</b> missing, ${m.accepted.toLocaleString()} accepted.</div>
+       <div class="small muted">Most recent: ${m.examples.slice(0, 8).map((e) => e[1]).join(", ")}</div>
+       <div class="small muted">Accept with <code>merx accept-withdrawals ${esc(id)} --reason "..."</code></div>`
+    : '<div class="muted small">None.</div>';
+  const r = d.reconciliation;
+  document.getElementById("recon").innerHTML = r
+    ? `<div class="small">Against <b>${esc(r.other)}</b>:
+        ${Object.entries(r.counts).map(([k, v]) => `${esc(k)} <b>${v.toLocaleString()}</b>`).join(" · ")}
+        (matches are counted, not stored)</div>
+       <table style="margin-top:6px"><thead><tr><th>Date</th><th>Class</th><th class="num">Here</th>
+       <th class="num">There</th></tr></thead><tbody>${r.latest_breaks.slice(0, 10).map((b) =>
+        `<tr><td>${b.valid_date}</td><td class="small">${esc(b.class)}</td>
+         <td class="num">${b.here ?? "–"}</td><td class="num">${b.there ?? "–"}</td></tr>`).join("")}
+       </tbody></table>`
+    : '<div class="muted small">Not reconciled with another channel.</div>';
+}
+
+load().catch((e) => { document.querySelector("main").innerHTML = `<pre>${esc(e)}</pre>`; });
+</script>
+</body>
+</html>

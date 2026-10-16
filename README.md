@@ -7,8 +7,25 @@ trustworthy.
 > **Status: early.** Nine real datasets from two public sources run end to end through
 > the engine (contract → raw download → staged table → checks → publish gate,
 > orchestrated by Dagster), failing checks become tracked exceptions, every value keeps
-> its full revision history, and the data-quality lab scores anomaly detectors on the
-> data. Still to come: the consoles.
+> its full revision history, the data-quality lab scores anomaly detectors on the data,
+> and two consoles show it all: one for operations, one for people using the data.
+
+## Consoles
+
+`merx serve`, then open <http://127.0.0.1:8000/ops> and <http://127.0.0.1:8000/client>.
+
+**Operations** (`/ops`): every dataset's publication status, checks on the current
+build, open exceptions with owners and root causes, values gone missing, reconciliation
+breaks, and the detector scores.
+
+![Operations console](docs/img/ops-console.png)
+
+**Data** (`/client`): published series only, with quality status, a note when newer
+data is held back, and **"as known on"**: the series as it stood on any past date. Below,
+US crude stocks as known on 2016-06-01 (dashed) against today: the 2016 redefinition
+of the whole history.
+
+![Client view, as known on 2016-06-01](docs/img/client-as-known-on.png)
 
 ## What runs today
 
@@ -115,7 +132,8 @@ merx assign-root-cause 2 source_data_error --note "..."
 merx missing eia_wti_spot                        # values known before, missing now
 merx accept-withdrawals eia_wti_spot --reason "..."
 merx revisions eia_us_gas_storage
-merx as-known-at eia_us_crude_stocks 2015-01-01  # the dataset as it stood then
+merx as-known-at eia_us_crude_stocks 2016-06-01  # the dataset as it stood then
+merx serve                                       # the consoles, on port 8000
 ```
 
 ## Layout
@@ -130,6 +148,7 @@ merx as-known-at eia_us_crude_stocks 2015-01-01  # the dataset as it stood then
 | `src/merx/engine/` | Staging, checks, the publish gate, exceptions and point-in-time history, as plain functions |
 | `src/merx/quality/` | The data-quality lab: seeded defects, detectors, scoring |
 | `src/merx/orchestration/` | Dagster: the asset factory, resources, schedules |
+| `src/merx/api/` | The consoles: a read-only FastAPI app and two plain HTML pages |
 | `tests/` | Tests on synthetic files generated at test time |
 
 ## Provenance
