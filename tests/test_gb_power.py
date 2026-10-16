@@ -163,3 +163,35 @@ def test_rows_repeated_at_a_chunk_boundary_are_kept_once():
         key=lambda row: (row["id"],),
     )
     assert json.loads(merged)["data"] == [{"id": "same"}]
+
+
+def test_a_forecast_missing_from_one_half_hour_is_a_gap():
+    """Observed on the real API: 26 half hours in January 2025 carry no forecast key at
+    all, while the outturn is there. That is a hole in the record, not a new shape."""
+    content = json.dumps(
+        {
+            "data": [
+                intensity("2025-01-01T00:00Z", 100, 95),
+                {
+                    "from": "2025-01-01T00:30Z",
+                    "to": "",
+                    "intensity": {"actual": 90, "index": "low"},
+                },
+            ]
+        }
+    ).encode()
+    parsed = carbon.parse(content, {"forecast": "forecast", "outturn": "actual"})
+    forecasts = [v for m, _, _, _, v in parsed.observations if m == "forecast"]
+    outturns = [v for m, _, _, _, v in parsed.observations if m == "outturn"]
+    assert forecasts == [100.0, None]
+    assert outturns == [95.0, 90.0]
+
+
+def test_a_measure_missing_from_every_half_hour_is_a_format_change():
+    """If the API dropped the field entirely, publishing a column of nulls would be
+    worse than failing: the series would look present and be empty."""
+    content = json.dumps(
+        {"data": [{"from": "2026-10-15T00:00Z", "to": "", "intensity": {"actual": 90}}]}
+    ).encode()
+    with pytest.raises(carbon.CarbonFormatError, match="changed shape"):
+        carbon.parse(content, {"forecast": "forecast", "outturn": "actual"})
