@@ -375,3 +375,25 @@ Dagster UI answers 401 without the password and 200 with it.
 answered `HEAD` requests with 405, which link previews and uptime monitors use; they now
 answer 200. The chart's unit label overlapped the top axis value, and zero was printed
 as "-0"; both fixed.
+
+## 2026-10-16: merging to main deploys
+
+**Built.** A `deploy` job in the CI workflow, gated on the test job and on `main`, with a
+concurrency group so two merges queue rather than build over each other; a smoke test
+against the public URL; `deploy/README.md` rewritten around the new flow; three tests
+that assert the job's guards as data. The host's `/opt/merx/src` became a clone of the
+public repository, and a root-owned `/opt/merx/bin/deploy.sh` is pinned as the forced
+command for a key that can do nothing else. Decision D-016. 130 tests.
+
+**Checked.** The conversion of the host's source directory to a clone reported no
+difference between the deployed copy and `origin/main`, which confirms that the previous
+copy-based deploy had landed exactly the commit `DEPLOYED_COMMIT` claimed. A deploy was
+then run through the restricted key end to end: the key was refused when asked for
+anything but `deploy`, the image rebuilt, both containers were recreated, and the commit
+was recorded.
+
+**Found while deploying.** Asking for the site immediately after that deploy returned 502:
+the containers were `running` while the server was still binding its port. "Running" is
+not "serving", and a container that started and then died would have passed the same
+check, so the deploy script now waits for the consoles to answer from inside the
+container, and the workflow waits for the public URL on top of that.

@@ -359,3 +359,37 @@ for no benefit at this size).
 checks, the gate's decisions. The host's data directory is also an off-laptop copy of the
 raw zone. A run started by hand in Dagster's UI while the timer's run is writing could
 collide on DuckDB's single writer; both are short and rare, and a collision fails loudly.
+
+## D-016: Merging to main deploys, through a key that can only deploy (2026-10-16)
+
+**Context.** Updating the host was a manual copy of the working tree followed by a build
+over SSH. That is fine once and a liability afterwards: it can ship code that never
+passed the tests, it can ship a dirty working tree, and it drifts — the live site and
+`main` have no enforced relationship. The host also runs unrelated things, so whatever
+performs the deploy should not be able to touch them.
+
+**Decision.** The host's source directory is a clone of the public repository, so an
+update is `git fetch` and `git reset --hard origin/main` rather than a copy. A `deploy`
+job in the existing CI workflow runs after the test job, only on `main`, and connects to
+the host with a dedicated key. That key is pinned in `authorized_keys` to a forced
+command: sshd runs `/opt/merx/bin/deploy.sh` whatever the client asks for, and the script
+accepts exactly one word, `deploy`. The script is root-owned and is **not** in this
+repository, so no push can change what the key may do; `deploy/README.md` documents it
+and the script logs its own checksum, so drift is visible. The job then checks the public
+URL through the proxy, retrying for a minute, and fails if the site does not answer.
+
+**Alternatives considered.** Reusing the existing deploy key on the host (one fewer
+secret, but a single key for two unrelated stacks); a full shell key (simpler, and able
+to do anything on a host that is not only ours); keeping the script in the repository
+(reviewable in pull requests, but then the forced command bounds nothing); a pull-based
+deploy, where the host polls for new commits (no inbound access needed, at the cost of a
+polling delay and another always-on process); verifying the deploy from inside the
+proxy's network rather than over the internet (fewer moving parts, but it would not
+notice the proxy or the certificate being broken).
+
+**Consequences.** The live site is `main`, as a matter of mechanism rather than of
+diligence, and `DEPLOYED_COMMIT` says which commit. A failed deploy or a site that does
+not come back fails the workflow on `main` and is visible. The runner accepts the host's
+key on first use (`ssh-keyscan`); the exposure is a deploy key that can only deploy, and
+the smoke test would show a deploy that never arrived. Data is out of scope: a new
+dataset's backfill is still run on the host.

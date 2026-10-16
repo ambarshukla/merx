@@ -27,3 +27,49 @@ jobs:
       # Tests never touch the network: sources are replaced by synthetic files.
       - name: Test
         run: pytest
+
+  # Only what is on main, and only once the tests above have passed, reaches the host.
+  # The key in MERX_DEPLOY_KEY cannot get a shell there: the host's sshd runs a fixed
+  # script (see deploy/README.md) whatever this job asks for, so a change to this file
+  # cannot widen what the deploy may do.
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Two merges in quick succession queue instead of building over each other.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy
+        env:
+          DEPLOY_KEY: ${{ secrets.MERX_DEPLOY_KEY }}
+          # user@host; the host is not public, so it lives in a secret too.
+          DEPLOY_TARGET: ${{ secrets.MERX_DEPLOY_TARGET }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_KEY" ] || [ -z "$DEPLOY_TARGET" ]; then
+            echo "MERX_DEPLOY_KEY / MERX_DEPLOY_TARGET are not set; nothing deployed." >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" >~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "${DEPLOY_TARGET#*@}" >>~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy -o BatchMode=yes -o IdentitiesOnly=yes \
+            "$DEPLOY_TARGET" deploy
+
+      # The deploy is only believed once the live site answers through the proxy.
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          url=https://merx.ambarshukla.dev/api/client/sources
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 10 "$url" >/dev/null; then
+              echo "live after ${attempt} attempt(s)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "the site did not answer $url within 60s" >&2
+          exit 1
