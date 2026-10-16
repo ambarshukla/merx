@@ -549,3 +549,30 @@ spreadsheet dropped. A known problem turns out to have a second cost: it quietly
 degrades a control that depends on that data. Without the `min_observations` guard those
 months would have been compared against an 11-day "monthly average" and reported as
 ordinary breaks, which would have been worse than reporting them as not comparable.
+
+## 2026-10-17: eleven charts that said "pass" and drew nothing
+
+**The symptom.** On the live site a dataset showed a green `pass` badge, a last date and
+a publication time, and an empty chart. Eleven of twenty-nine series were in that state.
+
+**The cause.** Adding `period` to the staged and published tables (D-017) changed the
+shape of tables already on disk, and the series query ordered by `valid_date, period`.
+Every table rebuilt since the change has the column; the ones that had not been rebuilt
+do not, so the query failed with a binder error and the page received a 500 while every
+other panel — fed by tables that *had* been rebuilt — carried on reporting health.
+
+**Why re-staging is not the whole answer.** For three of the eleven it could never have
+been. WTI, Brent and Henry Hub spot are blocked at the publish gate, which means their
+`published` table is deliberately *not* replaced: clients keep the last publication that
+passed. A blocked dataset therefore keeps a table in the old shape indefinitely, and
+code that assumes otherwise stays broken for exactly the datasets already in trouble.
+
+**The fix.** Daily and coarser data has one value per date, so the query no longer
+mentions `period` or `valid_time_utc` at all; only sub-daily data, which genuinely needs
+them, asks for them. The same applies to the point-in-time query. A test builds a
+published table in the old shape and reads it, and fails with the production error when
+the fix is removed.
+
+**Worth naming.** "Status is green" and "the page works" were being measured on
+different tables. A check that reads one artifact says nothing about another, and the
+endpoints had been tested while the page had not.

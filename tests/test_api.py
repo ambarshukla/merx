@@ -108,3 +108,37 @@ def test_pages_answer_head_requests_too(client):
     # Link previews and uptime monitors check a page with HEAD before fetching it.
     for path in ("/client", "/sources", "/ops"):
         assert client.head(path).status_code == 200
+
+
+def test_a_daily_series_published_before_period_existed_still_reads(tmp_path):
+    """A table published by an older version of the code has no period column, and
+    never will: a blocked dataset keeps its last good publication indefinitely, so the
+    gate will not replace it. Reading a daily series must therefore not mention period.
+
+    This shipped broken. Eleven of twenty-nine series returned 500 in production while
+    every check still said "pass", because the status came from tables that had been
+    rebuilt and the chart came from one that had not."""
+    import duckdb
+
+    from merx.api import data
+    from merx.config import CONTRACTS_DIR
+    from merx.contracts import load_contract
+    from merx.store import DB_FILE
+
+    contract = load_contract(CONTRACTS_DIR / "eia_wti_spot.yaml")
+    con = duckdb.connect(str(tmp_path / DB_FILE))
+    con.execute("CREATE SCHEMA published")
+    # Exactly the old shape: no period, no valid_time_utc.
+    con.execute(
+        'CREATE TABLE published."eia_wti_spot" '
+        "(measure VARCHAR, valid_date DATE, value DOUBLE, quality_status VARCHAR)"
+    )
+    con.execute(
+        'INSERT INTO published."eia_wti_spot" VALUES '
+        "('price', '2026-10-13', 100.0, 'pass'), ('price', '2026-10-14', 101.0, 'pass')"
+    )
+    con.close()
+
+    store = data.Store(tmp_path)
+    points = data.published_series(store, contract, "price", None, None)
+    assert points == [["2026-10-13", 100.0], ["2026-10-14", 101.0]]
