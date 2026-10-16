@@ -4,11 +4,20 @@
 as a small, honest version of how commodity datasets are manufactured and kept
 trustworthy.
 
-> **Status: early.** Eleven real datasets from two public sources run end to end through
-> the engine (contract → raw download → staged table → checks → publish gate,
-> orchestrated by Dagster), failing checks become tracked exceptions, every value keeps
-> its full revision history, the data-quality lab scores anomaly detectors on the data,
-> and two consoles show it all: one for operations, one for people using the data.
+> **Independent personal project.** Built entirely from public sources and synthetic
+> data, on personal time and equipment. It contains no confidential, proprietary or
+> employer information, and is not affiliated with, endorsed by, or derived from the
+> work of any employer, client, data vendor or exchange. Fetched data is never
+> committed, and every synthetic component is labelled as such. Sources, licences and
+> what is deliberately *not* used: [`docs/PROVENANCE.md`](docs/PROVENANCE.md).
+
+> **Status: running.** **29 real datasets from six public sources**, across all six
+> sectors — oil, gas, power, carbon, metals and agriculture — run end to end through one
+> engine (contract → raw download → staged table → checks → publish gate, orchestrated
+> by Dagster). Failing checks become tracked exceptions with owners; every value keeps
+> its full revision history; two sources for the same number are reconciled against each
+> other; the data-quality lab scores anomaly detectors on the real series; and three
+> consoles show it all. Adding a dataset is a contract file, not a pipeline.
 
 ## Consoles
 
@@ -165,15 +174,6 @@ merx serve                                       # the consoles, on port 8000
 | `src/merx/api/` | The consoles: a read-only FastAPI app and two plain HTML pages |
 | `deploy/` | The hosted deployment: compose file, daily timer, how to install and update |
 | `tests/` | Tests on synthetic files generated at test time |
-
-## Provenance
-
-**Everything here is built from public sources or is synthetic. There is no
-confidential, proprietary or employer information anywhere in this repository.**
-It is an independent personal project, not affiliated with or written on behalf of
-any employer, data vendor or exchange. Fetched data is never committed, and every
-synthetic component is labelled as such. Details and the list of sources:
-[`docs/PROVENANCE.md`](docs/PROVENANCE.md).
 
 ## What it will be
 
