@@ -4,9 +4,9 @@
 as a small, honest version of how commodity datasets are manufactured and kept
 trustworthy.
 
-> **Status: early.** Six real EIA datasets run end to end through the engine
-> (contract → raw download → staged table → checks, orchestrated by Dagster), and the
-> data-quality lab scores anomaly detectors on them. Still to come: positioning data,
+> **Status: early.** Eight real datasets from two public sources run end to end through
+> the engine (contract → raw download → staged table → checks, orchestrated by
+> Dagster), and the data-quality lab scores anomaly detectors on them. Still to come:
 > the publish gate, point-in-time views, and the consoles.
 
 ## What runs today
@@ -19,6 +19,12 @@ trustworthy.
 | US crude oil stocks excluding the SPR | EIA | weekly | 1 |
 | US Lower 48 natural gas in storage | EIA | weekly | 1 |
 | WTI crude oil futures, contract 1 | EIA | daily (series ended 2024-04-05) | 3 |
+| WTI futures positions by trader group (14 measures) | CFTC | weekly, yearly files from 2010 | 2 |
+| Henry Hub futures positions by trader group (14 measures) | CFTC | weekly, yearly files from 2010 | 2 |
+
+The positioning datasets also check an accounting identity every week: open interest
+equals all long positions plus spreads, and all short positions plus spreads. It holds
+in all 875 weeks since 2010 for both markets.
 
 Each dataset is one YAML file in [`contracts/`](contracts/). A factory turns every
 contract into two Dagster assets and its checks:
@@ -79,7 +85,7 @@ set `DAGSTER_HOME` to an absolute path to keep run history between sessions.
 | `contracts/` | One YAML contract per dataset |
 | `reference/` | Instruments, units, and the crosswalk from provider codes to our identifiers |
 | `src/merx/contracts/` | The contract schema and loader |
-| `src/merx/sources/` | Downloading, and one strict parser per file format |
+| `src/merx/sources/` | Downloading, and one strict parser per file format (EIA spreadsheets, CFTC yearly zips) |
 | `src/merx/store/` | The raw zone and its manifest; the DuckDB connection |
 | `src/merx/engine/` | Staging and checks, as plain functions |
 | `src/merx/quality/` | The data-quality lab: seeded defects, detectors, scoring |

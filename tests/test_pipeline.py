@@ -139,9 +139,14 @@ def test_repository_definitions_cover_every_contract(tmp_path):
     keys = {k.to_user_string() for k in defs.resolve_all_asset_keys()}
     for c in contracts:
         assert {f"raw/{c.id}", f"staged/{c.id}"} <= keys
-    # One schedule per distinct (cron, timezone), each refreshing all its contracts.
+    # One schedule per distinct (cron, timezone) for ordinary contracts; a schedule of its
+    # own for each partitioned contract, which picks the partition to refresh.
     expected = {
-        schedule_job_name(c.schedule.cron, c.schedule.timezone) + "_schedule" for c in contracts
+        f"refresh_{c.id}_schedule"
+        if c.source.partitions
+        else schedule_job_name(c.schedule.cron, c.schedule.timezone) + "_schedule"
+        for c in contracts
     }
     assert {s.name for s in defs.schedules} == expected
     assert "refresh_30_18_x_x_1to5_new_york_schedule" in expected
+    assert "refresh_cftc_wti_positions_schedule" in expected

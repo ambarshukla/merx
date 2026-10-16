@@ -6,3 +6,4 @@ WTI_NYMEX_C1,WTI crude oil futures nearest contract (NYMEX contract 1),crude_oil
 US_CRUDE_STOCKS_EX_SPR,US ending stocks of crude oil excluding the Strategic Petroleum Reserve,crude_oil,inventory,United States,kbbl
 WTI_NYMEX_FUTURES,WTI crude oil futures market (NYMEX) as reported for positioning,crude_oil,futures_market,Cushing Oklahoma US,contracts
 US_L48_GAS_STORAGE,US Lower 48 natural gas working gas in underground storage,natural_gas,inventory,Lower 48 States US,Bcf
+HENRY_HUB_NYMEX_FUTURES,Henry Hub natural gas futures market (NYMEX) as reported for positioning,natural_gas,futures_market,Erath Louisiana US,contracts

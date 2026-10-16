@@ -105,3 +105,34 @@ seasonal series. The seasonal suite is the best overall: 87% recall, 87% precisi
 
 **Real events, correctly flagged by every detector on untouched data:** WTI spot
 -36.98 on 2020-04-20, and Henry Hub 30.72 on 2026-01-23.
+
+## 2026-10-15: CFTC positioning, partitioned by year
+
+**Built.** A parser for the CFTC's yearly disaggregated futures files, year partitions
+for raw assets (D-008), a `balance` check, and two contracts: WTI and Henry Hub
+futures positions by trader group, 14 measures each. A manifest column records each
+download's partition. 87 tests.
+
+**Probed first, then built on what was found** (2026-10-15):
+- The current year's zip is updated weekly (last modified Friday 2026-10-09, holding the
+  report of Tuesday 2026-10-06), so yearly files alone cover history and the present.
+- **The report date column changed name between 2012 and 2013**, from
+  `Report_Date_as_MM_DD_YYYY` to `Report_Date_as_YYYY-MM-DD`, and the old name was
+  wrong about its own contents: its values were already `YYYY-MM-DD`. The parser
+  accepts either name, insists on ISO values, and cross-checks each date against the
+  separate `YYMMDD` column.
+- The CFTC's own header spells two swap-dealer columns with a double underscore
+  (`Swap__Positions_Short_All`). The contract names columns exactly as the file does.
+- Market display names drift; codes do not. WTI (067651) was "CRUDE OIL, LIGHT
+  SWEET" up to the report of 2022-02-01 and "WTI-PHYSICAL" from 2022-02-08; Henry Hub
+  (023651) moved from "NATURAL GAS" to "NAT GAS NYME".
+
+**Live backfill.** 34 yearly files (2010 to 2026, both markets), 60.6 MB. Each market:
+875 weekly reports from 2010-01-05 to 2026-10-06, 12,250 rows, no gaps. **Both
+open-interest identities hold in every one of the 875 weeks for both markets.**
+Predictions (written first): about 875 weeks, at least two display names per market,
+identities hold, freshness passes. All matched.
+
+**Found while testing.** A damaged zip (bad checksum) escaped as Python's own
+`BadZipFile` rather than a format error. The parser now reads the whole file up front
+and reports damage as a `SourceFormatError`.

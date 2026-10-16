@@ -28,12 +28,28 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class YearlyPartitions(_Strict):
+    """The source publishes one file per year; ``{year}`` in the URL is replaced by each."""
+
+    by: Literal["year"]
+    start: int = Field(ge=1990)
+
+
 class Source(_Strict):
-    provider: Literal["eia"]
-    format: Literal["eia_hist_xls"]
+    provider: Literal["eia", "cftc"]
+    format: Literal["eia_hist_xls", "cftc_disaggregated"]
     url: str = Field(pattern=r"^https://")
     # The provider's own identifier for the series, checked against the file on every run.
     series_key: str
+    partitions: YearlyPartitions | None = None
+    # For files with many columns: which source column holds each measure.
+    columns: dict[MeasureName, str] | None = None
+
+    @model_validator(mode="after")
+    def _partitions_match_url(self) -> Source:
+        if (self.partitions is not None) != ("{year}" in self.url):
+            raise ValueError("a {year} placeholder in the url and partitions go together")
+        return self
 
 
 class Schedule(_Strict):
@@ -78,8 +94,21 @@ class FreshnessCheck(_Strict):
     severity: Severity = "error"
 
 
+class BalanceCheck(_Strict):
+    """On every date, one measure must equal the sum of others (an accounting identity,
+    e.g. open interest equals all long positions plus spreads)."""
+
+    type: Literal["balance"]
+    name: MeasureName
+    total: MeasureName
+    parts: list[MeasureName] = Field(min_length=2)
+    tolerance: float = Field(default=0.0, ge=0)
+    severity: Severity = "error"
+
+
 Check = Annotated[
-    NotNullCheck | UniqueCheck | RangeCheck | FreshnessCheck, Field(discriminator="type")
+    NotNullCheck | UniqueCheck | RangeCheck | FreshnessCheck | BalanceCheck,
+    Field(discriminator="type"),
 ]
 
 
@@ -97,18 +126,29 @@ class Contract(_Strict):
     source: Source
     schedule: Schedule
     checks: list[Check] = Field(min_length=1)
+    # Whether the data-quality lab seeds defects into this dataset's series.
+    in_quality_lab: bool = True
 
     @model_validator(mode="after")
     def _consistent(self) -> Contract:
         if len(set(self.measures)) != len(self.measures):
             raise ValueError(f"duplicate measures: {self.measures}")
-        if self.source.format in SINGLE_SERIES_FORMATS and len(self.measures) != 1:
-            raise ValueError(f"format {self.source.format} holds one series: name one measure")
+        if self.source.format in SINGLE_SERIES_FORMATS:
+            if len(self.measures) != 1:
+                raise ValueError(f"format {self.source.format} holds one series: name one measure")
+            if self.source.columns is not None:
+                raise ValueError(f"format {self.source.format} takes no columns mapping")
+        elif self.source.columns is None or set(self.source.columns) != set(self.measures):
+            raise ValueError("source.columns must map every measure, and only those")
         for check in self.checks:
             if isinstance(check, RangeCheck) and check.measure not in (None, *self.measures):
                 raise ValueError(f"range check names unknown measure {check.measure!r}")
             if isinstance(check, UniqueCheck) and "valid_date" not in check.columns:
                 raise ValueError("a unique check must include valid_date")
+            if isinstance(check, BalanceCheck):
+                unknown = {check.total, *check.parts} - set(self.measures)
+                if unknown:
+                    raise ValueError(f"balance check names unknown measures {sorted(unknown)}")
         names = [check_name(c) for c in self.checks]
         duplicates = sorted({n for n in names if names.count(n) > 1})
         if duplicates:
@@ -129,4 +169,6 @@ def check_name(check: Check) -> str:
             return f"range_{column}_{measure}"
         case FreshnessCheck():
             return "freshness"
+        case BalanceCheck(name=name):
+            return f"balance_{name}"
     raise TypeError(f"unknown check: {check!r}")

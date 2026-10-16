@@ -12,6 +12,8 @@ BAKEOFF_KEY = dg.AssetKey(["lab", "detector_bakeoff"])
 
 
 def build_lab_assets(contracts: list[Contract]) -> list[dg.AssetsDefinition]:
+    contracts = [c for c in contracts if c.in_quality_lab]
+
     @dg.asset(
         key=BAKEOFF_KEY,
         deps=[staged_key(c) for c in contracts],

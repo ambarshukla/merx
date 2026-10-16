@@ -156,3 +156,28 @@ v2. It also showed that the right detector depends on the series (seasonal serie
 need a seasonal detector), so detector choice should become a contract field. Scores are
 an upper bound: real errors are messier than seeded ones. See
 [`DQ_LAB.md`](DQ_LAB.md).
+
+## D-008: Yearly source files are Dagster partitions; accounting identities are checks (2026-10-15)
+
+**Context.** The CFTC publishes its positioning history as one zip per year, and keeps
+updating the current year's file every week. Its reports also carry an accounting
+identity: every open futures contract has a long side and a short side.
+
+**Decision.** A contract can declare `partitions: {by: year, start: ...}` with a
+`{year}` placeholder in its URL. Its raw asset is then partitioned by year in Dagster:
+each year is fetched, landed (under its own folder, with the partition in the
+manifest) and re-fetched on its own, and the staged table is rebuilt from the newest
+file of every year. Its schedule refreshes only the year of the latest Tuesday report,
+so the first run in January still refreshes December's file. A new `balance` check
+asserts that one measure equals the sum of others on every date; the positioning
+contracts use it for open interest against all longs plus spreads, and against all
+shorts plus spreads.
+
+**Alternatives considered.** Downloading every year on every run (17 files a week for
+one changing file); the headerless current-week file plus a one-off history load (two
+formats for one dataset, and the history load is invisible to the orchestrator).
+
+**Consequences.** Backfill is "materialise all partitions", and a single bad year can
+be re-fetched alone. The current year's partition list is computed when definitions
+load, so a new year appears after a reload. A balance check catches a whole class of
+corruption (a dropped or shifted column) that range checks cannot.

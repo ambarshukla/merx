@@ -10,7 +10,14 @@ from datetime import date
 
 import duckdb
 
-from merx.contracts.model import Check, FreshnessCheck, NotNullCheck, RangeCheck, UniqueCheck
+from merx.contracts.model import (
+    BalanceCheck,
+    Check,
+    FreshnessCheck,
+    NotNullCheck,
+    RangeCheck,
+    UniqueCheck,
+)
 
 _EXAMPLES = 20
 
@@ -108,6 +115,35 @@ def _freshness(
     )
 
 
+def _balance(con: duckdb.DuckDBPyConnection, table: str, check: BalanceCheck) -> CheckOutcome:
+    placeholders = ", ".join("?" for _ in check.parts)
+    breaks = con.execute(
+        f"""
+        SELECT valid_date, total, parts_sum, n_parts FROM (
+            SELECT valid_date,
+                   sum(value) FILTER (WHERE measure = ?)                    AS total,
+                   sum(value) FILTER (WHERE measure IN ({placeholders}))    AS parts_sum,
+                   count(value) FILTER (WHERE measure IN ({placeholders}))  AS n_parts
+            FROM {table} GROUP BY valid_date
+        )
+        WHERE total IS NULL OR n_parts <> ? OR abs(total - parts_sum) > ?
+        ORDER BY valid_date
+        """,
+        [check.total, *check.parts, *check.parts, len(check.parts), check.tolerance],
+    ).fetchall()
+    return CheckOutcome(
+        passed=not breaks,
+        description=f"{len(breaks)} dates where {check.total} != sum of {len(check.parts)} parts",
+        metadata={
+            "breaks": len(breaks),
+            "tolerance": check.tolerance,
+            "examples": [
+                [d.isoformat(), total, parts, n] for d, total, parts, n in breaks[:_EXAMPLES]
+            ],
+        },
+    )
+
+
 def run_check(
     con: duckdb.DuckDBPyConnection, table: str, check: Check, today: date
 ) -> CheckOutcome:
@@ -120,4 +156,6 @@ def run_check(
             return _range(con, table, check)
         case FreshnessCheck():
             return _freshness(con, table, check, today)
+        case BalanceCheck():
+            return _balance(con, table, check)
     raise TypeError(f"unknown check: {check!r}")
