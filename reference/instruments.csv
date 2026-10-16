@@ -17,3 +17,11 @@ MAIZE_MONTHLY,"Maize price, monthly (World Bank monthly benchmark)",maize,ags,be
 SOYBEANS_MONTHLY,"Soybean price, monthly (World Bank monthly benchmark)",soybeans,ags,benchmark,spot,global,USD/mt
 WTI_MONTHLY_AVG,"WTI crude oil price, monthly average (World Bank monthly benchmark)",crude_oil,oil,benchmark,spot,global,USD/bbl
 BRENT_MONTHLY_AVG,"Brent crude oil price, monthly average (World Bank monthly benchmark)",crude_oil,oil,benchmark,spot,global,USD/bbl
+CORN_CBOT_FUTURES,Corn futures market (Chicago Board Of Trade) as reported for positioning,corn,ags,futures_market,positioning,United States,contracts
+SOYBEANS_CBOT_FUTURES,Soybeans futures market (Chicago Board Of Trade) as reported for positioning,soybeans,ags,futures_market,positioning,United States,contracts
+WHEAT_SRW_CBOT_FUTURES,Wheat futures market (Chicago Board Of Trade) as reported for positioning,wheat,ags,futures_market,positioning,United States,contracts
+GOLD_COMEX_FUTURES,Gold futures market (Commodity Exchange Inc.) as reported for positioning,gold,metals,futures_market,positioning,United States,contracts
+SILVER_COMEX_FUTURES,Silver futures market (Commodity Exchange Inc.) as reported for positioning,silver,metals,futures_market,positioning,United States,contracts
+COPPER_COMEX_FUTURES,Copper futures market (Commodity Exchange Inc.) as reported for positioning,copper,metals,futures_market,positioning,United States,contracts
+RBOB_NYMEX_FUTURES,Rbob gasoline futures market (New York Mercantile Exchange) as reported for positioning,gasoline,oil,futures_market,positioning,United States,contracts
+ULSD_NYMEX_FUTURES,Diesel futures market (New York Mercantile Exchange) as reported for positioning,diesel,oil,futures_market,positioning,United States,contracts

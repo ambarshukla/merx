@@ -1,0 +1,75 @@
+# Who holds soybeans futures: the CFTC's weekly Commitments of Traders
+# report, disaggregated, futures only. Positions as of Tuesday, published the following
+# Friday.
+#
+# This contract is configuration only: the parser, the checks and the accounting
+# identity below are the same ones the WTI and Henry Hub contracts already use. Market
+# code 005602 was verified against the 2026 file before this was written.
+id: cftc_soybeans_positions
+title: Soybeans futures positions by trader group, weekly (CFTC)
+domain: ags
+owner: ags-data-steward
+tier: 2
+frequency: weekly
+instrument: SOYBEANS_CBOT_FUTURES
+unit: contracts
+measures:
+  - open_interest
+  - producer_long
+  - producer_short
+  - swap_long
+  - swap_short
+  - swap_spread
+  - managed_money_long
+  - managed_money_short
+  - managed_money_spread
+  - other_reportable_long
+  - other_reportable_short
+  - other_reportable_spread
+  - nonreportable_long
+  - nonreportable_short
+source:
+  provider: cftc
+  format: cftc_disaggregated
+  url: https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip
+  series_key: "005602"
+  partitions: {by: year, start: 2010}
+  # Column names exactly as the CFTC spells them, including its double underscores.
+  columns:
+    open_interest: Open_Interest_All
+    producer_long: Prod_Merc_Positions_Long_All
+    producer_short: Prod_Merc_Positions_Short_All
+    swap_long: Swap_Positions_Long_All
+    swap_short: Swap__Positions_Short_All
+    swap_spread: Swap__Positions_Spread_All
+    managed_money_long: M_Money_Positions_Long_All
+    managed_money_short: M_Money_Positions_Short_All
+    managed_money_spread: M_Money_Positions_Spread_All
+    other_reportable_long: Other_Rept_Positions_Long_All
+    other_reportable_short: Other_Rept_Positions_Short_All
+    other_reportable_spread: Other_Rept_Positions_Spread_All
+    nonreportable_long: NonRept_Positions_Long_All
+    nonreportable_short: NonRept_Positions_Short_All
+schedule:
+  cron: "0 18 * * 5"
+  timezone: America/New_York
+in_quality_lab: false
+checks:
+  - {type: not_null, column: value}
+  - {type: unique, columns: [measure, valid_date]}
+  - {type: range, column: value, min: 0, max: 10000000}
+  # Report dated Tuesday, published Friday; a holiday can push it back a few days.
+  - {type: freshness, max_age_days: 14}
+  # Every open contract has a long side and a short side, so open interest equals all
+  # long positions plus spreads, and equally all short positions plus spreads.
+  - type: balance
+    name: longs
+    total: open_interest
+    parts: [producer_long, swap_long, managed_money_long, other_reportable_long,
+            nonreportable_long, swap_spread, managed_money_spread, other_reportable_spread]
+  - type: balance
+    name: shorts
+    total: open_interest
+    parts: [producer_short, swap_short, managed_money_short, other_reportable_short,
+            nonreportable_short, swap_spread, managed_money_spread, other_reportable_spread]
+  - {type: no_withdrawals}

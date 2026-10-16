@@ -41,10 +41,11 @@ def test_wednesday_adds_crude_stocks_and_thursday_gas_storage():
 def test_friday_refreshes_this_years_cftc_partition():
     jobs = due_jobs(CONTRACTS, datetime(2026, 10, 24, 0, 30, tzinfo=UTC))  # Friday NY
     cftc = {j.name: j.partition_key for j in jobs if "cftc" in j.name}
-    assert cftc == {
-        "refresh_cftc_henry_hub_positions": "2026",
-        "refresh_cftc_wti_positions": "2026",
-    }
+    # Derived from the contracts rather than listed, so adding a market — which is a
+    # configuration change — does not also require editing this test.
+    expected = {f"refresh_{c.id}": "2026" for c in CONTRACTS if c.source.provider == "cftc"}
+    assert expected, "no CFTC contracts found"
+    assert cftc == expected
 
 
 def test_the_weekend_runs_only_the_markets_that_trade_then():

@@ -47,5 +47,6 @@ Being able to say what was left out, and why, is part of handling data responsib
 | Source | Why not |
 |---|---|
 | LME (metals), Platts and Argus (assessments), ICE and EEX (carbon and energy settlements), CME (settlements) | Licensed benchmarks. Redistribution requires a commercial agreement, so they are not used at all, and no attempt is made to approximate them from other data. |
+| ICE Brent positioning | The CFTC's disaggregated futures-only file has no plain ICE Brent market (checked 2026-10-16). The name appears only on a NYMEX cash-settled look-alike, `06765T` BRENT LAST DAY, and on spread contracts. Rather than present one of those as Brent positioning, merx has none. |
 | LBMA gold price | Same: a licensed benchmark. The World Bank's monthly gold price is used instead, which is a different thing and is labelled as such. |
 | IMF Primary Commodity Prices | Looked at on 2026-10-16 as a second institution to reconcile the World Bank against. The dataset's own metadata states "© International Monetary Fund Copyright. All Rights Reserved", and the current reuse terms could not be verified, so nothing from it is downloaded or published. The cross-source comparison uses sources whose terms are confirmed instead. |
