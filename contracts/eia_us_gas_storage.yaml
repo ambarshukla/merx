@@ -10,6 +10,7 @@ tier: 1
 frequency: weekly
 instrument: US_L48_GAS_STORAGE
 unit: Bcf
+measures: [working_gas]
 source:
   provider: eia
   format: eia_hist_xls
@@ -20,6 +21,6 @@ schedule:
   timezone: America/New_York
 checks:
   - {type: not_null, column: value}
-  - {type: unique, columns: [valid_date]}
+  - {type: unique, columns: [measure, valid_date]}
   - {type: range, column: value, min: 0, max: 5000}
   - {type: freshness, max_age_days: 14}

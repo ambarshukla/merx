@@ -1,9 +1,10 @@
-"""Stage a parsed series: one typed table per dataset, rebuilt from a single raw file.
+"""Stage observations: one typed table per dataset, rebuilt from a single raw file.
 
 ``staged.<dataset_id>`` is replaced in one statement, so a rerun on the same raw file
-produces the same table (idempotent) and a reader never sees half a load. Each row
-carries the raw file it came from and when that file was fetched (its knowledge time),
-which is what the point-in-time store will build on.
+produces the same table (idempotent) and a reader never sees half a load. The table is
+in long form, one row per (measure, valid_date). Each row carries the raw file it came
+from and when that file was fetched (its knowledge time), which is what the
+point-in-time store will build on.
 """
 
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from pathlib import Path
 import pyarrow as pa
 
 from merx.contracts import Contract
-from merx.sources.eia_xls import ParsedSeries
+from merx.engine.formats import ReadResult
 from merx.store import connect
 from merx.store.raw import LandedFile
 
@@ -35,6 +36,7 @@ class StageResult:
     null_values: int
     first_date: date
     last_date: date
+    measures: list[str]
 
 
 def staged_table(contract: Contract) -> str:
@@ -45,19 +47,24 @@ def stage(
     contract: Contract,
     instrument_id: str,
     landed: LandedFile,
-    parsed: ParsedSeries,
+    read: ReadResult,
     data_dir: Path,
 ) -> StageResult:
-    if not parsed.points:
-        raise ValueError(f"{contract.id}: parsed file {landed.path} has no observations")
-    n = len(parsed.points)
+    obs = read.observations
+    if not obs:
+        raise ValueError(f"{contract.id}: raw file {landed.path} has no observations")
+    unexpected = {m for m, _, _ in obs} - set(contract.measures)
+    if unexpected:
+        raise ValueError(f"{contract.id}: file produced undeclared measures {sorted(unexpected)}")
+    n = len(obs)
     table = pa.table(
         {
             "dataset_id": [contract.id] * n,
-            "series_key": [parsed.series_key] * n,
+            "series_key": [contract.source.series_key] * n,
             "instrument_id": [instrument_id] * n,
-            "valid_date": pa.array([d for d, _ in parsed.points], pa.date32()),
-            "value": pa.array([v for _, v in parsed.points], pa.float64()),
+            "measure": [m for m, _, _ in obs],
+            "valid_date": pa.array([d for _, d, _ in obs], pa.date32()),
+            "value": pa.array([v for _, _, v in obs], pa.float64()),
             "unit": [contract.unit] * n,
             "knowledge_time_utc": pa.array([landed.fetched_at_utc] * n, pa.timestamp("us")),
             "raw_sha256": [landed.sha256] * n,
@@ -68,22 +75,35 @@ def stage(
     con = connect(data_dir)
     try:
         con.register("incoming", table)
-        con.execute(f"CREATE OR REPLACE TABLE {name} AS SELECT * FROM incoming")
-        con.execute(_RELEASE_LOG_DDL)
         con.execute(
-            "INSERT OR IGNORE INTO meta.release_log VALUES (?, ?, ?, ?, ?)",
-            [
-                contract.id,
-                landed.path,
-                landed.fetched_at_utc,
-                parsed.release_date,
-                parsed.next_release_date,
-            ],
+            f"CREATE OR REPLACE TABLE {name} AS SELECT * FROM incoming ORDER BY measure, valid_date"
         )
+        if read.release_date is not None and read.next_release_date is not None:
+            con.execute(_RELEASE_LOG_DDL)
+            con.execute(
+                "INSERT OR IGNORE INTO meta.release_log VALUES (?, ?, ?, ?, ?)",
+                [
+                    contract.id,
+                    landed.path,
+                    landed.fetched_at_utc,
+                    read.release_date,
+                    read.next_release_date,
+                ],
+            )
         rows, nulls, first, last = con.execute(
             f"SELECT count(*), count(*) - count(value), min(valid_date), max(valid_date) "
             f"FROM {name}"
         ).fetchone()
+        measures = [
+            m for (m,) in con.execute(f"SELECT DISTINCT measure FROM {name} ORDER BY 1").fetchall()
+        ]
     finally:
         con.close()
-    return StageResult(table=name, rows=rows, null_values=nulls, first_date=first, last_date=last)
+    return StageResult(
+        table=name,
+        rows=rows,
+        null_values=nulls,
+        first_date=first,
+        last_date=last,
+        measures=measures,
+    )

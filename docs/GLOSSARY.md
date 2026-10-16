@@ -25,8 +25,10 @@ uses them.
 | **Henry Hub** | A natural gas pipeline hub in Erath, Louisiana; its price is the main US natural gas benchmark. |
 | **Idempotent** | Running a step twice gives the same result as running it once. Staging is idempotent: it rebuilds the table from one raw file. |
 | **Knowledge time** | The moment a value became known to us. Used to rebuild history "as known then". |
+| **Long form** | A table shape with one row per (measure, date) and a single value column, rather than one column per measure. |
 | **MAD (median absolute deviation)** | A robust measure of spread: the median of the distances from the median. Unlike standard deviation, one spike does not distort it. |
 | **Manifest** | The table recording every raw download: where it came from, when, its hash and size. |
+| **Measure** | One named number a dataset reports per date, e.g. `price`, or `managed_money_long` in a positioning report. |
 | **MMBtu** | One million British thermal units, the standard unit for pricing natural gas in the US. |
 | **NYMEX (New York Mercantile Exchange)** | The exchange where WTI crude oil and Henry Hub natural gas futures trade. |
 | **PRA (price reporting agency)** | An organisation that assesses physical commodity prices from market evidence, for example Platts or Argus. |

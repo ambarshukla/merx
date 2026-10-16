@@ -7,6 +7,7 @@ tier: 1
 frequency: daily
 instrument: HENRY_HUB_SPOT
 unit: USD/MMBtu
+measures: [price]
 source:
   provider: eia
   format: eia_hist_xls
@@ -19,6 +20,6 @@ checks:
   # The source itself has no value for 2018-01-05 (observed 2026-10-15). The gap is
   # accepted here by name, so any new gap still fails.
   - {type: not_null, column: value, allow: [2018-01-05]}
-  - {type: unique, columns: [valid_date]}
+  - {type: unique, columns: [measure, valid_date]}
   - {type: range, column: value, min: -10, max: 100}
   - {type: freshness, max_age_days: 10}

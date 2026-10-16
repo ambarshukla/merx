@@ -32,9 +32,13 @@ raw/eia_wti_spot      download, keep the file untouched in data/raw/, record it 
         ▼
 staged/eia_wti_spot   parse strictly, rebuild staged."eia_wti_spot" in DuckDB
         │
-        ├─ not_null_value      ├─ range_value
-        └─ unique_valid_date   └─ freshness
+        ├─ not_null_value              ├─ range_value
+        └─ unique_measure_valid_date   └─ freshness
 ```
+
+Every staged table has the same long shape: one row per `(measure, valid_date)`, with
+the value, its unit, our instrument identifier, and the raw file and fetch time it came
+from. A single-series dataset has one measure (`price`, `stocks`, `working_gas`).
 
 ## Run it
 

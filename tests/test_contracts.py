@@ -19,6 +19,7 @@ tier: 1
 frequency: daily
 instrument: WTI_CUSHING_SPOT
 unit: USD/bbl
+measures: [price]
 source:
   provider: eia
   format: eia_hist_xls
@@ -115,3 +116,26 @@ def test_reference_rejects_crosswalk_to_unknown_instrument(tmp_path):
     )
     with pytest.raises(ReferenceError, match="unknown instrument NOPE"):
         load_reference(tmp_path)
+
+
+def test_single_series_format_needs_exactly_one_measure(tmp_path):
+    text = VALID.format(id="t").replace("measures: [price]", "measures: [price, volume]")
+    with pytest.raises(ContractError, match="holds one series"):
+        load_contract(write(tmp_path, "t", text))
+
+
+def test_range_check_on_unknown_measure_is_rejected(tmp_path):
+    text = VALID.format(id="t").replace(
+        "{type: not_null, column: value}",
+        "{type: range, column: value, min: 0, max: 1, measure: volume}",
+    )
+    with pytest.raises(ContractError, match="unknown measure 'volume'"):
+        load_contract(write(tmp_path, "t", text))
+
+
+def test_unique_check_must_include_the_date(tmp_path):
+    text = VALID.format(id="t").replace(
+        "{type: not_null, column: value}", "{type: unique, columns: [measure]}"
+    )
+    with pytest.raises(ContractError, match="must include valid_date"):
+        load_contract(write(tmp_path, "t", text))

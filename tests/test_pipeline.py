@@ -73,7 +73,7 @@ def test_clean_file_lands_stages_and_passes_every_check(tmp_path):
     assert result.success
     assert check_results(result) == {
         "not_null_value": True,
-        "unique_valid_date": True,
+        "unique_measure_valid_date": True,
         "range_value": True,
         "freshness": True,
     }

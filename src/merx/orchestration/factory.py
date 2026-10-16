@@ -11,24 +11,19 @@ new file format.
 """
 
 import re
-from collections.abc import Callable
 from datetime import UTC, datetime
 
 import dagster as dg
 
 from merx.contracts import Contract, check_name
 from merx.contracts.model import Check
+from merx.engine import formats
 from merx.engine.checks import run_check
 from merx.engine.stage import stage, staged_table
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import Reference
-from merx.sources import eia_xls
 from merx.store import connect
 from merx.store.raw import RawZone
-
-PARSERS: dict[str, Callable[[bytes, str], eia_xls.ParsedSeries]] = {
-    "eia_hist_xls": eia_xls.parse,
-}
 
 _SEVERITY = {"error": dg.AssetCheckSeverity.ERROR, "warn": dg.AssetCheckSeverity.WARN}
 
@@ -47,7 +42,8 @@ def _tags(contract: Contract) -> dict[str, str]:
 
 def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefinition]:
     instrument = reference.resolve(contract.source.provider, contract.source.series_key)
-    parse = PARSERS[contract.source.format]
+    if contract.source.format not in formats.READERS:
+        raise ValueError(f"{contract.id}: no reader for format {contract.source.format}")
 
     @dg.asset(
         key=raw_key(contract),
@@ -92,19 +88,21 @@ def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefi
     def staged_asset(store: DataStore) -> dg.MaterializeResult:
         zone = RawZone(store.path)
         landed = zone.latest(contract.id)
-        parsed = parse(zone.read(landed), contract.source.series_key)
-        result = stage(contract, instrument.instrument_id, landed, parsed, store.path)
-        return dg.MaterializeResult(
-            metadata={
-                "dagster/row_count": result.rows,
-                "null_values": result.null_values,
-                "first_valid_date": result.first_date.isoformat(),
-                "last_valid_date": result.last_date.isoformat(),
-                "source_release_date": parsed.release_date.isoformat(),
-                "source_next_release_date": parsed.next_release_date.isoformat(),
-                "raw_path": landed.path,
-            }
-        )
+        read = formats.read(zone.read(landed), contract)
+        result = stage(contract, instrument.instrument_id, landed, read, store.path)
+        metadata = {
+            "dagster/row_count": result.rows,
+            "null_values": result.null_values,
+            "measures": result.measures,
+            "first_valid_date": result.first_date.isoformat(),
+            "last_valid_date": result.last_date.isoformat(),
+            "raw_path": landed.path,
+        }
+        if read.release_date is not None:
+            metadata["source_release_date"] = read.release_date.isoformat()
+        if read.next_release_date is not None:
+            metadata["source_next_release_date"] = read.next_release_date.isoformat()
+        return dg.MaterializeResult(metadata=metadata)
 
     return [raw_asset, staged_asset]
 

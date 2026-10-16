@@ -110,3 +110,24 @@ away); keeping only the latest file (no replay, no history).
 replayed without re-downloading, and successive versions of a file are the raw
 material for point-in-time history. Losing `data/` loses that history, because the
 sources only serve their current version.
+
+## D-006: Every staged table is in long form (2026-10-15)
+
+**Context.** The first datasets each held one number per date. The positioning reports
+coming next hold several per date (open interest, and long and short positions for
+each trader group), and the quality lab needs to treat every number as a series.
+
+**Decision.** Every staged table has one row per `(measure, valid_date)`. A contract
+lists its `measures`; single-series formats must name exactly one. Unique checks must
+include `valid_date` (and include `measure` in practice), a range check can be scoped
+to one measure, and freshness is judged on the stalest measure. A small reader registry
+(`merx.engine.formats`) turns each file format into these rows, so a new format adds
+one reader and touches nothing else.
+
+**Alternatives considered.** One contract per measure (no table change, but many
+near-identical contracts and one published report split across files); wide tables
+with one column per measure (natural for reading, but every check and detector would
+need to know each dataset's columns).
+
+**Consequences.** Checks and detectors are written once for every dataset. Reading a
+whole report back in its published shape needs a pivot, which a published view can do.
