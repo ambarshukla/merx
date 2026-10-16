@@ -17,6 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# What a hosted deployment adds: Dagster's web UI.
+server = [
+    "dagster-webserver>=1.13,<1.14",
+]
 dev = [
     "dagster-webserver>=1.13,<1.14",
     "httpx>=0.28",

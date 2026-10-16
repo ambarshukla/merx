@@ -1,0 +1,12 @@
+.git
+.venv
+.venv-*
+data
+docs
+tests
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.env
+CLAUDE.md
+.tmp_dagster_home_*

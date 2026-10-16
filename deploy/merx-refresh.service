@@ -1,0 +1,11 @@
+[Unit]
+Description=merx: run today's refresh jobs
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/merx/src/deploy
+ExecStart=/usr/bin/docker compose run --rm refresh
+# A run can take a few minutes (downloads, staging, history replay).
+TimeoutStartSec=45min

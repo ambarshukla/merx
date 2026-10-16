@@ -1,0 +1,49 @@
+# The hosted deployment: see deploy/README.md.
+#
+#   web      the consoles (/client, /sources, /ops), behind the host's reverse proxy
+#   dagster  Dagster's UI, behind the proxy with a password (it has no login of its own)
+#   refresh  a one-off run of today's jobs, started by a daily system timer
+#
+# Everything shares one data directory on the host: the raw zone, the DuckDB database
+# and Dagster's run history. Values that differ per host live in deploy/.env.
+name: merx
+
+x-merx: &merx
+  build:
+    context: ..
+  image: merx:latest
+  env_file: .env
+  volumes:
+    - ${MERX_HOST_DATA:-./data}:/data
+
+services:
+  web:
+    <<: *merx
+    container_name: merx-web
+    command: ["merx", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    networks: [proxy]
+    mem_limit: 512m
+
+  dagster:
+    <<: *merx
+    container_name: merx-dagster
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000",
+              "-m", "merx.orchestration.definitions"]
+    restart: unless-stopped
+    networks: [proxy, default]
+    mem_limit: 1g
+
+  refresh:
+    <<: *merx
+    profiles: [jobs]
+    command: ["merx", "refresh"]
+    networks: [default]
+    mem_limit: 1500m
+
+networks:
+  # The network the host's reverse proxy runs on, so it can reach web and dagster by
+  # container name. Named in deploy/.env (PROXY_NETWORK).
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK}
