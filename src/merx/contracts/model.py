@@ -16,9 +16,17 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # The data columns of every staged table that checks may refer to.
-SeriesColumn = Literal["measure", "valid_date", "value"]
+SeriesColumn = Literal["measure", "valid_date", "period", "value"]
 Severity = Literal["error", "warn"]
 MeasureName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$")]
+
+# The sectors the catalogue is organised by. The client's menu is built from these.
+Sector = Literal["oil", "gas", "power", "carbon", "metals", "ags"]
+
+# How often an observation arrives. Below a day, observations are keyed by a numbered
+# period within the day rather than by a timestamp: see ``period`` in merx.engine.stage.
+Frequency = Literal["half_hourly", "hourly", "daily", "weekly", "monthly", "annual"]
+SUB_DAILY: frozenset[str] = frozenset({"half_hourly", "hourly"})
 
 # File formats that hold exactly one series, so their contract names exactly one measure.
 SINGLE_SERIES_FORMATS = {"eia_hist_xls", "eia_api_v2"}
@@ -59,6 +67,32 @@ class Source(_Strict):
         if (self.format == "eia_api_v2") != (self.api_key_env is not None):
             raise ValueError("api_key_env is required for eia_api_v2 and only for it")
         return self
+
+
+class PeriodsPerDayCheck(_Strict):
+    """Every day must carry the expected number of periods.
+
+    Written for markets settled in numbered periods: Great Britain has 48 half-hourly
+    settlement periods a day, and 46 or 50 on the two days the clocks change. The
+    newest day is skipped, because it is usually still filling up.
+    """
+
+    type: Literal["periods_per_day"]
+    expected: int = Field(gt=0)
+    # Day lengths that are also correct, such as the clock-change days.
+    also_allow: list[int] = []
+    severity: Severity = "error"
+
+
+class NoGapsCheck(_Strict):
+    """Within each day the periods present must run 1..n with none missing.
+
+    ``periods_per_day`` counts; this one looks for holes, so a day with period 7 absent
+    and period 49 present fails here even though the count is right.
+    """
+
+    type: Literal["no_gaps"]
+    severity: Severity = "error"
 
 
 class Schedule(_Strict):
@@ -148,7 +182,9 @@ Check = Annotated[
     | FreshnessCheck
     | BalanceCheck
     | NoWithdrawalsCheck
-    | AnomalyCheck,
+    | AnomalyCheck
+    | PeriodsPerDayCheck
+    | NoGapsCheck,
     Field(discriminator="type"),
 ]
 
@@ -156,13 +192,15 @@ Check = Annotated[
 class Contract(_Strict):
     id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     title: str
-    domain: str
+    domain: Sector
     owner: str
     # 1 = critical (failed error checks block the data), 3 = best effort.
     tier: Literal[1, 2, 3]
-    frequency: Literal["daily", "weekly", "monthly"]
+    frequency: Frequency
     instrument: str
-    unit: str
+    # One unit for the whole dataset, or one per measure when a file mixes them (the
+    # World Bank's price sheet carries $/bbl, $/mt and $/troy oz side by side).
+    unit: str | dict[MeasureName, str]
     measures: list[MeasureName] = Field(min_length=1)
     source: Source
     schedule: Schedule
@@ -173,10 +211,23 @@ class Contract(_Strict):
     # reconciled value by value (reconcile/<id>).
     reconcile_with: ReconcileWith | None = None
 
+    def unit_for(self, measure: str) -> str:
+        """The unit of one measure. A dataset with a single unit gives it for all."""
+        if isinstance(self.unit, str):
+            return self.unit
+        return self.unit[measure]
+
+    @property
+    def sub_daily(self) -> bool:
+        """Observations are numbered within the day rather than one per date."""
+        return self.frequency in SUB_DAILY
+
     @model_validator(mode="after")
     def _consistent(self) -> Contract:
         if len(set(self.measures)) != len(self.measures):
             raise ValueError(f"duplicate measures: {self.measures}")
+        if isinstance(self.unit, dict) and set(self.unit) != set(self.measures):
+            raise ValueError("a unit per measure must name every measure, and only those")
         if self.source.format in SINGLE_SERIES_FORMATS:
             if len(self.measures) != 1:
                 raise ValueError(f"format {self.source.format} holds one series: name one measure")
@@ -189,6 +240,11 @@ class Contract(_Strict):
                 raise ValueError(f"range check names unknown measure {check.measure!r}")
             if isinstance(check, UniqueCheck) and "valid_date" not in check.columns:
                 raise ValueError("a unique check must include valid_date")
+            # Below a day, the date alone is not a key: two values share a date.
+            if self.sub_daily and isinstance(check, UniqueCheck) and "period" not in check.columns:
+                raise ValueError(f"{self.frequency} data needs period in its unique check")
+            if isinstance(check, PeriodsPerDayCheck) and not self.sub_daily:
+                raise ValueError("periods_per_day applies to sub-daily data only")
             if isinstance(check, BalanceCheck):
                 unknown = {check.total, *check.parts} - set(self.measures)
                 if unknown:
@@ -219,4 +275,8 @@ def check_name(check: Check) -> str:
             return f"anomaly_{detector}"
         case NoWithdrawalsCheck():
             return "no_withdrawals"
+        case PeriodsPerDayCheck():
+            return "periods_per_day"
+        case NoGapsCheck():
+            return "no_gaps"
     raise TypeError(f"unknown check: {check!r}")

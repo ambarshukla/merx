@@ -126,10 +126,17 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     _print(
                         rows,
-                        ["measure", "valid_date", "last_value", "last_seen_utc", "accepted"],
+                        [
+                            "measure",
+                            "valid_date",
+                            "period",
+                            "last_value",
+                            "last_seen_utc",
+                            "accepted",
+                        ],
                         limit=20,
                     )
-                    print(f"{len(rows)} missing, {sum(r[4] for r in rows)} accepted")
+                    print(f"{len(rows)} missing, {sum(r[5] for r in rows)} accepted")
             case "accept-withdrawals":
                 contract = _contract(args.dataset)
                 n = withdrawals.accept(con, contract.id, staged_table(contract), args.reason)

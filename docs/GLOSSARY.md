@@ -26,6 +26,7 @@ uses them.
 | **Contango** | A forward curve where later delivery costs more than nearer delivery, usually a sign of ample supply and storage. |
 | **Contract 1 (front month)** | The futures contract nearest to expiry. "Contract 1" is a series that rolls to the next contract as each one expires. |
 | **Crosswalk** | A table that maps each provider's identifier for something onto our own identifier, so data is joined on codes, not on names that can change. |
+| **Clock change** | The two days a year local clocks shift. In Great Britain the electricity day then has 46 or 50 half-hourly settlement periods instead of 48. |
 | **Dagster** | An open-source orchestrator: it runs pipeline steps in order, on schedules, and records every run and check. |
 | **Data contract** | A declarative description of a dataset: source, schema, units, calendar, tier, release schedule, owner and rules. |
 | **Deploy key** | A key that grants a machine, rather than a person, access to one system for one purpose. Here it can start a deploy and nothing else. |
@@ -71,6 +72,8 @@ uses them.
 | **Settlement price** | The exchange's official end-of-day price, used for margining. Distinct from the last traded price. |
 | **SHA-256** | A fingerprint of a file's bytes. Identical files share it; any change gives a different one. |
 | **Smoke test** | A quick check after a change that the thing still works at all — here, that the live site answers — before trusting anything finer. |
+| **Settlement period** | The unit of time a power market settles in. Great Britain uses half an hour, numbered 1 upward within each day, which is why the day, not the clock, defines the key. |
+| **Sector** | The group a dataset belongs to for browsing: oil, gas, power, carbon, metals or agriculture. |
 | **Spot price** | The price for a commodity delivered now (within days), as opposed to a futures price for later delivery. |
 | **SPR (Strategic Petroleum Reserve)** | The US government's emergency crude oil stockpile, reported separately from commercial stocks. |
 | **Spread position** | Holding both a long and a short futures position (e.g. in different months). Counted on both sides of open interest. |

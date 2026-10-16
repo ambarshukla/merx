@@ -196,16 +196,16 @@ def missing(store: Store, contract: Contract) -> dict:
         return {"missing": 0, "accepted": 0, "examples": []}
     accepted_join = (
         "LEFT JOIN ops.accepted_withdrawals a ON a.dataset_id = ? "
-        "AND a.measure = k.measure AND a.valid_date = k.valid_date"
+        "AND a.measure = k.measure AND a.valid_date = k.valid_date AND a.period = k.period"
         if store.has("ops", "accepted_withdrawals")
         else ""
     )
     accepted_col = "a.dataset_id IS NOT NULL" if accepted_join else "false"
     rows = store.query(
         f"""
-        WITH k AS (SELECT DISTINCT measure, valid_date FROM pit."{contract.id}")
+        WITH k AS (SELECT DISTINCT measure, valid_date, period FROM pit."{contract.id}")
         SELECT k.measure, k.valid_date, {accepted_col}
-        FROM k ANTI JOIN staged."{contract.id}" s USING (measure, valid_date)
+        FROM k ANTI JOIN staged."{contract.id}" s USING (measure, valid_date, period)
         {accepted_join}
         ORDER BY k.valid_date DESC
         """,

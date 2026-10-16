@@ -15,8 +15,10 @@ from merx.contracts.model import (
     BalanceCheck,
     Check,
     FreshnessCheck,
+    NoGapsCheck,
     NotNullCheck,
     NoWithdrawalsCheck,
+    PeriodsPerDayCheck,
     RangeCheck,
     UniqueCheck,
 )
@@ -156,7 +158,7 @@ def _no_withdrawals(
     rows = withdrawals.missing(con, dataset_id, table)
     if rows is None:
         return CheckOutcome(True, "no history yet to compare against", {"missing": 0})
-    unaccepted = [r for r in rows if not r[4]]
+    unaccepted = [r for r in rows if not r[5]]
     return CheckOutcome(
         passed=not unaccepted,
         description=f"{len(unaccepted)} previously known values missing from this build"
@@ -166,7 +168,7 @@ def _no_withdrawals(
             "missing_accepted": len(rows) - len(unaccepted),
             "examples": [
                 [m, d.isoformat(), v, seen.isoformat()]
-                for m, d, v, seen, _ in unaccepted[:_EXAMPLES]
+                for m, d, _, v, seen, _ in unaccepted[:_EXAMPLES]
             ],
         },
     )
@@ -203,6 +205,67 @@ def _anomaly(
     )
 
 
+def _periods_per_day(
+    con: duckdb.DuckDBPyConnection, table: str, check: PeriodsPerDayCheck
+) -> CheckOutcome:
+    # The newest date is usually still filling up, so it is not judged here. Freshness
+    # is what notices a day that never arrives.
+    allowed = {check.expected, *check.also_allow}
+    placeholders = ", ".join("?" for _ in allowed)
+    wrong = con.execute(
+        f"""
+        SELECT measure, valid_date, count(DISTINCT period) AS periods
+        FROM {table}
+        WHERE valid_date < (SELECT max(valid_date) FROM {table})
+        GROUP BY measure, valid_date
+        HAVING periods NOT IN ({placeholders})
+        ORDER BY valid_date, measure
+        """,
+        sorted(allowed),
+    ).fetchall()
+    return CheckOutcome(
+        passed=not wrong,
+        description=f"{len(wrong)} days without {check.expected} periods"
+        + (
+            f" (or {', '.join(str(a) for a in sorted(check.also_allow))})"
+            if check.also_allow
+            else ""
+        ),
+        metadata={
+            "bad_days": len(wrong),
+            "expected": check.expected,
+            "also_allowed": sorted(check.also_allow),
+            "examples": [[m, d.isoformat(), n] for m, d, n in wrong[:_EXAMPLES]],
+        },
+    )
+
+
+def _no_gaps(con: duckdb.DuckDBPyConnection, table: str) -> CheckOutcome:
+    """Periods within a day must run 1..n with nothing missing in between."""
+    holes = con.execute(
+        f"""
+        SELECT measure, valid_date, min(period) AS lo, max(period) AS hi,
+               count(DISTINCT period) AS n
+        FROM {table}
+        WHERE valid_date < (SELECT max(valid_date) FROM {table})
+        GROUP BY measure, valid_date
+        HAVING lo <> 1 OR hi <> n
+        ORDER BY valid_date, measure
+        """
+    ).fetchall()
+    return CheckOutcome(
+        passed=not holes,
+        description=f"{len(holes)} days with missing periods",
+        metadata={
+            "days_with_holes": len(holes),
+            "examples": [
+                [m, d.isoformat(), f"periods {lo}-{hi}, {n} present"]
+                for m, d, lo, hi, n in holes[:_EXAMPLES]
+            ],
+        },
+    )
+
+
 def run_check(
     con: duckdb.DuckDBPyConnection,
     table: str,
@@ -226,4 +289,8 @@ def run_check(
             return _no_withdrawals(con, table, dataset_id)
         case AnomalyCheck():
             return _anomaly(con, table, check, frequency)
+        case PeriodsPerDayCheck():
+            return _periods_per_day(con, table, check)
+        case NoGapsCheck():
+            return _no_gaps(con, table)
     raise TypeError(f"unknown check: {check!r}")

@@ -397,3 +397,21 @@ the containers were `running` while the server was still binding its port. "Runn
 not "serving", and a container that started and then died would have passed the same
 check, so the deploy script now waits for the consoles to answer from inside the
 container, and the workflow waits for the public URL on top of that.
+
+## 2026-10-16: a model that fits more than one value a day
+
+**Built.** Observations now carry a `period` (0 for daily and coarser, 1..n within a day
+below that) and a `valid_time_utc` for display; `unit` may be given per measure; the
+`periods_per_day` and `no_gaps` checks; `sector` and `data_type` columns in
+`reference/instruments.csv`. Decisions D-017 and D-018. 142 tests.
+
+**Checked against the real data, not only fixtures.** Both representative datasets were
+restaged and their histories rebuilt from the raw zone, and the counts are unchanged:
+gas storage 876 staged rows and 883 history versions before and after; WTI spot 9,523 and
+10,284. Every existing row landed in period 0 with its unit intact, which is what the
+change is supposed to do — nothing.
+
+**Found.** Great Britain's clock-change days really do carry 46 and 50 settlement
+periods: Elexon returned 46 for 2026-03-29, 50 for 2025-10-26 and 48 for an ordinary day,
+each matching the prediction written before the probe. A timestamp key would have had to
+represent two distinct periods with the same local time on the autumn day.

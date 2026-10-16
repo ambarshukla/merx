@@ -393,3 +393,64 @@ not come back fails the workflow on `main` and is visible. The runner accepts th
 key on first use (`ssh-keyscan`); the exposure is a deploy key that can only deploy, and
 the smoke test would show a deploy that never arrived. Data is out of scope: a new
 dataset's backfill is still run on the host.
+
+## D-017: Sub-daily data is keyed by (date, period), not by a timestamp (2026-10-16)
+
+**Context.** Every dataset so far has at most one value per date. Power does not: Great
+Britain settles electricity in half-hourly periods, and the obvious model — a UTC
+timestamp per observation — cannot represent the days the clocks change. Those days have
+23 or 25 local hours, so 46 or 50 settlement periods, and two of the local times on the
+autumn day name two different periods.
+
+**Decision.** Observations carry a `period` alongside `valid_date`: 1..n within the day
+for sub-daily data, and **0 for daily and coarser data, meaning "the whole day"**. This
+is how the market itself settles, which is the reason it works — the clock-change days
+are 46 and 50 periods and nothing is ambiguous. The UTC start of each period is stored
+beside it as `valid_time_utc`, for display and ordering, and is never part of a key.
+Keeping `period` non-null for every dataset, rather than null for daily data, means each
+key, join and grouping in the engine is written once: in SQL a null never equals a null,
+so a nullable key column would have silently broken every reconciliation.
+
+Two checks come with it. `periods_per_day` counts the periods on each day and accepts the
+clock-change lengths when the contract declares them; `no_gaps` looks for holes, so a day
+with period 7 missing and period 49 present fails even though the count is right. Both
+skip the newest day, which is usually still filling up; freshness is what notices a day
+that never arrives.
+
+**Alternatives considered.** A UTC timestamp as the key (fails on clock-change days, and
+diverges from how the market and the data provider both speak); local time plus a
+daylight-saving flag (expressible, but every query then needs the flag and it is easy to
+forget); a separate table shape for sub-daily datasets (no change to existing code, at
+the cost of two engines to maintain, which is the opposite of this project's claim).
+
+**Consequences.** Existing datasets were rebuilt and came out byte-identical in count:
+gas storage 876 rows and 883 history versions before and after, WTI 9,523 and 10,284.
+The detectors still take one value per date, so anomaly checks are not yet available on
+sub-daily series; the lab scores them before that happens. Acceptances recorded in
+`ops.accepted_withdrawals` before this change are migrated in place rather than being
+re-asked of a person.
+
+## D-018: A unit per measure, and a sector taxonomy in reference data (2026-10-16)
+
+**Context.** A contract declares one `unit` for the whole dataset. That holds while a
+file carries one series, and breaks on the first file that does not: the World Bank's
+price sheet puts $/bbl, $/mt and $/troy oz side by side in one table. Separately, the
+catalogue needs to be browsable by sector once it stops being only oil and gas.
+
+**Decision.** `unit` accepts either a string, as now, or a mapping of measure to unit,
+validated to name every measure and only those; `contract.unit_for(measure)` is what the
+engine calls, and staged rows already carried a unit each. The taxonomy goes in
+`reference/instruments.csv` as `sector` and `data_type` columns rather than onto the
+contract, because they describe the instrument, not the dataset — and because the file
+already carried `kind`, which `data_type` is derived from. `domain` on the contract is
+now constrained to the sector list it was informally using.
+
+**Alternatives considered.** Moving units inside `measures` as a mapping of objects (more
+expressive, rewrites all eleven contracts and every reader that treats `measures` as a
+list); a `data_type` field on each contract (duplicates what the instrument already says,
+and lets the two disagree); a separate sectors table (a column on the instrument is
+enough until a sector needs attributes of its own).
+
+**Consequences.** A dataset may mix units, which the client has to show per measure
+rather than once per dataset. Unit *conversion* is deliberately not built: it waits for
+the first source that needs the same quantity compared across units.

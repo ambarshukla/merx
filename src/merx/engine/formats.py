@@ -8,12 +8,29 @@ readers here apply a contract to a parser's output.
 import gzip
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from typing import NamedTuple
 
 from merx.contracts import Contract
 from merx.sources import cftc, eia_api, eia_xls
 
-Observation = tuple[str, date, float | None]
+
+class Observation(NamedTuple):
+    """One number from a file.
+
+    ``period`` numbers an observation within its date, for data that arrives more often
+    than daily: Great Britain settles electricity in 48 half-hour periods a day, and the
+    market keys on (date, period) rather than on a timestamp — which is what makes the
+    46- and 50-period clock-change days expressible at all. Daily and coarser data uses
+    period 0, meaning "the whole day". ``valid_time_utc`` is the period's start, carried
+    for display and ordering; it is never the key.
+    """
+
+    measure: str
+    valid_date: date
+    value: float | None
+    period: int = 0
+    valid_time_utc: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -29,7 +46,7 @@ def _read_eia_hist_xls(content: bytes, contract: Contract) -> ReadResult:
     parsed = eia_xls.parse(content, contract.source.series_key)
     (measure,) = contract.measures
     return ReadResult(
-        observations=[(measure, d, v) for d, v in parsed.points],
+        observations=[Observation(measure, d, v) for d, v in parsed.points],
         release_date=parsed.release_date,
         next_release_date=parsed.next_release_date,
     )
@@ -38,13 +55,16 @@ def _read_eia_hist_xls(content: bytes, contract: Contract) -> ReadResult:
 def _read_eia_api_v2(content: bytes, contract: Contract) -> ReadResult:
     (measure,) = contract.measures
     points = eia_api.parse(content, contract.source.series_key)
-    return ReadResult(observations=[(measure, d, v) for d, v in points])
+    return ReadResult(observations=[Observation(measure, d, v) for d, v in points])
 
 
 def _read_cftc_disaggregated(content: bytes, contract: Contract) -> ReadResult:
     assert contract.source.columns is not None  # guaranteed by the contract schema
     parsed = cftc.parse(content, contract.source.series_key, contract.source.columns)
-    return ReadResult(observations=parsed.observations, source_labels=tuple(parsed.market_names))
+    return ReadResult(
+        observations=[Observation(m, d, v) for m, d, v in parsed.observations],
+        source_labels=tuple(parsed.market_names),
+    )
 
 
 READERS: dict[str, Callable[[bytes, Contract], ReadResult]] = {
