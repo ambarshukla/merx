@@ -49,19 +49,19 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         return m
 
     # --- pages --------------------------------------------------------------------
-    @app.get("/", include_in_schema=False)
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def index():
         return RedirectResponse("/client")
 
-    @app.get("/ops", include_in_schema=False)
+    @app.api_route("/ops", methods=["GET", "HEAD"], include_in_schema=False)
     def ops_page():
         return FileResponse(STATIC / "ops.html")
 
-    @app.get("/client", include_in_schema=False)
+    @app.api_route("/client", methods=["GET", "HEAD"], include_in_schema=False)
     def client_page():
         return FileResponse(STATIC / "client.html")
 
-    @app.get("/sources", include_in_schema=False)
+    @app.api_route("/sources", methods=["GET", "HEAD"], include_in_schema=False)
     def sources_page():
         return FileResponse(STATIC / "sources.html")
 

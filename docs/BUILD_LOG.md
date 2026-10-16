@@ -354,3 +354,24 @@ too. 121 tests.
 3,434 dates exist only in the API and 19 only in the spreadsheets. For Henry Hub, the
 1,768 dropped prices form a solid band from 1997 to 2011, removed between the archive
 copy of 2026-05-05 and the first download on 2026-10-15.
+
+## 2026-10-16: hosted at merx.ambarshukla.dev
+
+**Built.** A container image, `deploy/docker-compose.yml` (web, Dagster UI, refresh),
+`merx refresh` (the jobs due today, run through Dagster), a systemd timer, and
+`deploy/README.md`. Decision D-015. CFTC reuse terms confirmed (public domain,
+acknowledgement requested); both sources are credited on the client pages. 127 tests.
+
+**Deployed and checked.** The image builds on the host (Python 3.14, 781 MB); the
+seeded data (144 MB, including every archived copy) reads correctly in Linux
+containers. The first `merx refresh`, started by hand, downloaded the day's files and ran
+the daily and CFTC jobs; the only failed steps were the three expected blocked
+publications. The proxy obtained Let's Encrypt certificates as soon as DNS resolved;
+`https://merx.ambarshukla.dev/client`, `/sources` and `/ops` answer 200, and the internal
+Dagster UI answers 401 without the password and 200 with it.
+
+**Found while deploying.** Dagster's webserver exits if `DAGSTER_HOME` does not exist
+(it did not on the fresh data directory); the image now creates it on start. Pages
+answered `HEAD` requests with 405, which link previews and uptime monitors use; they now
+answer 200. The chart's unit label overlapped the top axis value, and zero was printed
+as "-0"; both fixed.

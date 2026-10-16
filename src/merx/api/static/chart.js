@@ -23,6 +23,7 @@ function niceTicks(lo, hi, count) {
 
 function fmt(v) {
   if (v === null || v === undefined) return "–";
+  if (Math.abs(v) < 1e-9) return "0";  // never "-0"
   const a = Math.abs(v);
   if (a >= 1e6) return (v / 1e6).toFixed(2) + "M";
   if (a >= 1e4) return Math.round(v).toLocaleString();
@@ -36,7 +37,7 @@ function lineChart(container, series, { unit = "", marks = [] } = {}) {
   const box = container.getBoundingClientRect();
   const W = Math.max(box.width, 300), H = Math.max(box.height, 200);
   const band = 12;
-  const m = { l: 64, r: 16, t: 12, b: 28 + marks.length * band };
+  const m = { l: 64, r: 16, t: unit ? 24 : 12, b: 28 + marks.length * band };
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, container);
   const tip = document.createElement("div");
   tip.className = "tip";
@@ -80,7 +81,7 @@ function lineChart(container, series, { unit = "", marks = [] } = {}) {
     el("text", { x: X(t), y: H - 8, "text-anchor": "middle" }, axis).textContent = String(y);
     el("line", { x1: X(t), x2: X(t), y1: m.t, y2: H - m.b }, grid);
   }
-  if (unit) el("text", { x: 8, y: m.t + 10 }, axis).textContent = unit;
+  if (unit) el("text", { x: 8, y: 12 }, axis).textContent = unit;
 
   for (const s of parsed) {
     let d = "", pen = false;
