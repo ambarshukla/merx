@@ -102,3 +102,9 @@ def test_an_empty_data_directory_is_read_without_being_created(tmp_path):
     assert client.get("/api/client/datasets").json() == []
     assert client.get("/api/ops/exceptions").json() == []
     assert not (tmp_path / "nothing").exists()
+
+
+def test_pages_answer_head_requests_too(client):
+    # Link previews and uptime monitors check a page with HEAD before fetching it.
+    for path in ("/client", "/sources", "/ops"):
+        assert client.head(path).status_code == 200

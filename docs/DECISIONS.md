@@ -333,3 +333,29 @@ an operations check is about what just arrived).
 **Consequences.** New extreme values reach a person as a warning, an exception with an
 owner. The positioning datasets have no anomaly check yet: the lab has not scored
 detectors on them.
+
+## D-015: Hosted on one small host: containers, a shared proxy, a daily timer (2026-10-16)
+
+**Context.** The consoles should be reachable at a public address, and the pipeline should
+keep running, and keep adding to the history, without a laptop being on. The host is a
+small virtual machine (2 CPUs, 4 GB) that already runs a reverse proxy for other sites.
+
+**Decision.** One container image runs everything. `merx-web` serves the consoles and
+`merx-dagster` serves Dagster's UI, both long-running with restart policies, attached to
+the proxy's Docker network so the proxy reaches them by name. The proxy terminates TLS
+(automatic certificates) and puts Dagster's UI behind basic authentication, because it
+has no login of its own. Instead of Dagster's always-on scheduler, a systemd timer runs
+`merx refresh` once a day: it runs the jobs whose schedule falls on that day, in each
+schedule's time zone, through Dagster, so the runs appear in its UI; the quality lab is
+rerun on Sundays. All processes share one data directory on the host, seeded from the
+development machine so the history (including archived copies) comes along.
+
+**Alternatives considered.** Dagster's daemon (native schedules, but another always-on
+process on a small host); a static export to a hosting service (no live refresh, and the
+gate and exceptions would stop changing); one container per dataset (more moving parts
+for no benefit at this size).
+
+**Consequences.** The site shows the platform operating: new downloads each weekday,
+checks, the gate's decisions. The host's data directory is also an off-laptop copy of the
+raw zone. A run started by hand in Dagster's UI while the timer's run is writing could
+collide on DuckDB's single writer; both are short and rare, and a collision fails loudly.

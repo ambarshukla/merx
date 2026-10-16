@@ -12,6 +12,8 @@ trustworthy.
 
 ## Consoles
 
+**Live:** <https://merx.ambarshukla.dev/client>, <https://merx.ambarshukla.dev/sources> and
+<https://merx.ambarshukla.dev/ops>, refreshed every day (`deploy/`, D-015). Locally:
 `merx serve`, then open <http://127.0.0.1:8000/client>, <http://127.0.0.1:8000/sources>
 and <http://127.0.0.1:8000/ops>.
 
@@ -161,6 +163,7 @@ merx serve                                       # the consoles, on port 8000
 | `src/merx/quality/` | The data-quality lab: seeded defects, detectors, scoring |
 | `src/merx/orchestration/` | Dagster: the asset factory, resources, schedules |
 | `src/merx/api/` | The consoles: a read-only FastAPI app and two plain HTML pages |
+| `deploy/` | The hosted deployment: compose file, daily timer, how to install and update |
 | `tests/` | Tests on synthetic files generated at test time |
 
 ## Provenance

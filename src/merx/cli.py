@@ -7,13 +7,14 @@
     merx revisions DATASET                  every revised value
     merx as-known-at DATASET 2018-01-01     the dataset as it stood at that moment
     merx serve                              the consoles at http://127.0.0.1:8000
+    merx refresh                            run the jobs due today (for a daily timer)
 
 Everything else (fetching, staging, checks, publishing) runs in Dagster.
 """
 
 import argparse
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 
 from merx.config import data_dir
 from merx.contracts import load_contracts
@@ -61,7 +62,23 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("serve")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
+    p = sub.add_parser("refresh")
+    p.add_argument("--dry-run", action="store_true", help="list the jobs due today and stop")
     args = parser.parse_args(argv)
+
+    if args.command == "refresh":
+        # Before opening the database: the jobs write to it.
+        from merx.orchestration.definitions import defs
+        from merx.orchestration.refresh import due_jobs, refresh
+
+        contracts = load_contracts(load_reference())
+        if args.dry_run:
+            for job in due_jobs(contracts, datetime.now(UTC)):
+                print(job.name, job.partition_key or "")
+            return 0
+        for name, ok in refresh(defs, contracts):
+            print(f"{'ok    ' if ok else 'failed'} {name}")
+        return 0
 
     if args.command == "serve":
         # Before opening the database: the consoles only ever read it, briefly.

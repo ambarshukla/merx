@@ -1,0 +1,12 @@
+[Unit]
+Description=merx: daily refresh, after every source's release time
+
+[Timer]
+# 00:30 UTC is 19:30 or 20:30 in New York, after the latest release time in the
+# contracts (18:30 New York). merx refresh works out which jobs are due that day.
+OnCalendar=*-*-* 00:30:00 UTC
+# Catch up if the host was off or rebooting at that moment.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
