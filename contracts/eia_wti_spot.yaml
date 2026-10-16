@@ -13,6 +13,8 @@ source:
   format: eia_hist_xls
   url: https://www.eia.gov/dnav/pet/hist_xls/RWTCd.xls
   series_key: RWTC
+  # Backfill history from dated copies in the Wayback Machine (probed 2026-10-15).
+  archive_backfill: true
 schedule:
   cron: "30 18 * * 1-5"
   timezone: America/New_York

@@ -16,6 +16,7 @@ from merx.orchestration.definitions import build_definitions
 from merx.orchestration.factory import build_assets, schedule_job_name
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import load_reference
+from merx.sources import wayback
 from merx.sources.http import FetchResult
 from merx.store import connect
 
@@ -23,11 +24,15 @@ CONTRACT = load_contract(CONTRACTS_DIR / "eia_wti_spot.yaml")
 
 
 class FileFetcher(HttpFetcher):
-    """Serves each URL from a local file instead of the network."""
+    """Serves each URL from a local file instead of the network. A web-archive index that
+    is not listed answers "no archived copies"."""
 
     files: dict[str, str]
+    polite_delay_s: float = 0.0
 
     def fetch(self, url: str) -> FetchResult:
+        if url not in self.files and url.startswith(wayback.CDX_ENDPOINT):
+            return FetchResult(url=url, status=200, headers={}, content=b"[]")
         content = Path(self.files[url]).read_bytes()
         return FetchResult(url=url, status=200, headers={"ETag": '"t"'}, content=content)
 

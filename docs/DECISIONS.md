@@ -212,3 +212,31 @@ re-running staging, which is cheap here. Exceptions give the operating numbers: 
 count, time to recover, and repeat share. Root-cause classes are validated in code so
 the list can grow; the first live exception needed a class that was missing
 (`source_discontinued`).
+
+## D-010: Point-in-time history is replayed from raw files, backfilled from a web archive (2026-10-15)
+
+**Context.** Sources revise published values, and sometimes redefine a whole series,
+overwriting their files in place. Anyone asking "what did we know on date X" (to
+reproduce a past report, or to backtest without using numbers that were not yet
+published) needs every version of every value and when it became known. This project
+only began downloading on 2026-10-15, so its own history starts then.
+
+**Decision.** History is derived, never edited: `pit."<id>"` is rebuilt by replaying
+every raw file of a dataset in knowledge-time order and recording, for each (measure,
+valid date), each distinct value with `known_from_utc`, `known_to_utc` and how it ended
+(`revised` or `withdrawn`). Missing values count as values, so a filled gap is a
+revision. For single-file sources that opt in (`archive_backfill`), an `archive/<id>`
+asset imports dated copies from the Internet Archive's Wayback Machine into the raw zone,
+marked `origin = archive`, with the capture time as knowledge time. Staging never reads
+archived copies; only history does.
+
+**Alternatives considered.** Recording versions incrementally as each download is
+staged (cheaper per run, but history becomes state that a bug can corrupt, with no way
+to rebuild it); starting history at the project's first download (honest but empty:
+no revisions would be visible for months or years).
+
+**Consequences.** History can always be rebuilt from the raw zone, which is why keeping
+every download matters (D-005). Archive knowledge times are upper bounds: a capture says
+the archive saw the file then, not that it was first published then, and the archive
+only has the copies it happened to take. The replay re-reads every raw file each run,
+which is fine at current sizes and is the first thing to make incremental if they grow.

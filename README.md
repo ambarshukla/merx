@@ -6,9 +6,9 @@ trustworthy.
 
 > **Status: early.** Eight real datasets from two public sources run end to end through
 > the engine (contract → raw download → staged table → checks → publish gate,
-> orchestrated by Dagster), failing checks become tracked exceptions, and the
-> data-quality lab scores anomaly detectors on the data. Still to come: point-in-time
-> views and the consoles.
+> orchestrated by Dagster), failing checks become tracked exceptions, every value keeps
+> its full revision history, and the data-quality lab scores anomaly detectors on the
+> data. Still to come: the consoles.
 
 ## What runs today
 
@@ -53,6 +53,22 @@ Every staged table has the same long shape: one row per `(measure, valid_date)`,
 the value, its unit, our instrument identifier, and the raw file and fetch time it came
 from. A single-series dataset has one measure (`price`, `stocks`, `working_gas`).
 
+## Point-in-time history
+
+Sources overwrite their files in place. `pit."<id>"` keeps every version of every value
+with when it became known, rebuilt by replaying every raw download; for three datasets
+the history is backfilled from dated copies in the Internet Archive's Wayback Machine
+(back to 2010). Any dataset can be rebuilt *as known at* any moment. What it found:
+
+- US crude stocks: in 2016 the entire weekly history back to 1982 was revised down by
+  15.7 to 34.1 million barrels.
+- US gas storage: seven weekly values revised (2017, 2021, 2024).
+- WTI spot: between September and October 2026, **744 daily prices from 1986 to 2019
+  disappeared from EIA's spreadsheet** while EIA's API still serves them. No check on
+  the rows present could see this; the history did.
+
+Details: [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md), decision D-010.
+
 ## The data-quality lab
 
 Which detectors actually catch bad data, and at what cost in false alarms? The lab
@@ -94,7 +110,7 @@ set `DAGSTER_HOME` to an absolute path to keep run history between sessions.
 | `src/merx/contracts/` | The contract schema and loader |
 | `src/merx/sources/` | Downloading, and one strict parser per file format (EIA spreadsheets, CFTC yearly zips) |
 | `src/merx/store/` | The raw zone and its manifest; the DuckDB connection |
-| `src/merx/engine/` | Staging, checks, the publish gate and exceptions, as plain functions |
+| `src/merx/engine/` | Staging, checks, the publish gate, exceptions and point-in-time history, as plain functions |
 | `src/merx/quality/` | The data-quality lab: seeded defects, detectors, scoring |
 | `src/merx/orchestration/` | Dagster: the asset factory, resources, schedules |
 | `tests/` | Tests on synthetic files generated at test time |

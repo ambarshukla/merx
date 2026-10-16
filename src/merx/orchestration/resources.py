@@ -21,6 +21,8 @@ class HttpFetcher(dg.ConfigurableResource):
     """Downloads source files over HTTPS."""
 
     timeout_s: float = 60.0
+    # Pause between requests when importing many files from one host (web archives).
+    polite_delay_s: float = 1.0
 
     def fetch(self, url: str) -> http.FetchResult:
         return http.fetch(url, timeout_s=self.timeout_s)

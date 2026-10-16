@@ -14,6 +14,8 @@ source:
   format: eia_hist_xls
   url: https://www.eia.gov/dnav/pet/hist_xls/WCESTUS1w.xls
   series_key: WCESTUS1
+  # Backfill history from dated copies in the Wayback Machine (probed 2026-10-15).
+  archive_backfill: true
 schedule:
   cron: "0 12 * * 3"
   timezone: America/New_York

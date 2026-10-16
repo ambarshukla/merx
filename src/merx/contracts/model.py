@@ -44,11 +44,16 @@ class Source(_Strict):
     partitions: YearlyPartitions | None = None
     # For files with many columns: which source column holds each measure.
     columns: dict[MeasureName, str] | None = None
+    # Import dated copies of this file from the Wayback Machine to backfill history from
+    # before the project began (point-in-time store). Single-file sources only.
+    archive_backfill: bool = False
 
     @model_validator(mode="after")
     def _partitions_match_url(self) -> Source:
         if (self.partitions is not None) != ("{year}" in self.url):
             raise ValueError("a {year} placeholder in the url and partitions go together")
+        if self.archive_backfill and self.partitions is not None:
+            raise ValueError("archive_backfill is for single-file sources, not partitioned ones")
         return self
 
 
