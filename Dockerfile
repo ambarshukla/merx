@@ -17,4 +17,7 @@ RUN pip install --no-cache-dir -e ".[server]"
 RUN useradd --create-home --uid 1000 merx
 USER merx
 
+# Dagster refuses to start unless DAGSTER_HOME exists; on a fresh data directory it
+# does not yet, so every process creates it first.
+ENTRYPOINT ["sh", "-c", "mkdir -p \"$DAGSTER_HOME\" && exec \"$@\"", "--"]
 CMD ["merx", "serve", "--host", "0.0.0.0", "--port", "8000"]
