@@ -164,3 +164,21 @@ def test_two_channels_reconcile_and_the_key_is_never_stored(tmp_path, monkeypatc
     assert not any(SECRET in u for u in urls)
     for p in paths:
         assert SECRET.encode() not in (tmp_path / "data" / p).read_bytes()
+
+
+def test_two_sources_view_groups_every_difference(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from merx.api import create_app
+
+    test_two_channels_reconcile_and_the_key_is_never_stored(tmp_path, monkeypatch)
+    client = TestClient(create_app(tmp_path / "data"))
+    (pair,) = [p for p in client.get("/api/client/sources").json() if p["id"] == "eia_wti_spot"]
+    assert pair["counts"]["match"] == 5 and pair["other"] == "eia_api_wti_spot"
+    view = client.get("/api/client/sources/eia_wti_spot").json()
+    groups = {g["key"]: g["count"] for g in view["groups"]}
+    # No history of earlier downloads here, so the missing date is "only ever in the API".
+    assert groups == {"dropped": 0, "api_only": 1, "api_fill": 0, "here_only": 0, "differs": 1}
+    assert len(view["here"]) == 6 and len(view["there"]) == 8
+    assert client.get("/api/client/sources/eia_us_gas_storage").status_code == 404
+    assert "two channels" in client.get("/sources").text

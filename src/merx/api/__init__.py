@@ -61,6 +61,10 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     def client_page():
         return FileResponse(STATIC / "client.html")
 
+    @app.get("/sources", include_in_schema=False)
+    def sources_page():
+        return FileResponse(STATIC / "sources.html")
+
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     # --- ops ----------------------------------------------------------------------
@@ -118,6 +122,17 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             "capture time, an upper bound on when they were public",
             "points": data.series_as_known_at(store, c, m, at),
         }
+
+    @app.get("/api/client/sources")
+    def client_sources():
+        return data.reconciled_pairs(store, contracts)
+
+    @app.get("/api/client/sources/{dataset}")
+    def client_source(dataset: str):
+        c = contract(dataset)
+        if c.reconcile_with is None:
+            raise HTTPException(404, f"{dataset} is not reconciled with a second channel")
+        return data.two_sources(store, c, by_id[c.reconcile_with.dataset])
 
     @app.get("/api/client/series/{dataset}/revisions")
     def client_revisions(dataset: str, measure: str | None = None):

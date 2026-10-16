@@ -13,6 +13,8 @@ are counted; every difference is stored in ``recon."<id>"`` with its class:
 The first three are breaks: real disagreements that someone should explain.
 """
 
+from datetime import UTC, datetime
+
 import duckdb
 
 from merx.contracts import Contract
@@ -71,4 +73,21 @@ def reconcile(
     # Matches are only counted; the stored table keeps the differences.
     con.execute(f"DELETE FROM {recon_table(contract)} WHERE class = 'match'")
     classes = ("match", *BREAK_CLASSES, "outside_range")
-    return {c: counts.get(c, 0) for c in classes}
+    result = {c: counts.get(c, 0) for c in classes}
+    # Keep every run's counts, so the matches (not stored row by row) stay visible.
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS meta.reconciliations (
+            dataset_id       VARCHAR   NOT NULL,
+            other_dataset_id VARCHAR   NOT NULL,
+            reconciled_at_utc TIMESTAMP NOT NULL,
+            match INTEGER, value_differs INTEGER, only_here INTEGER,
+            only_there INTEGER, outside_range INTEGER
+        )
+        """
+    )
+    con.execute(
+        "INSERT INTO meta.reconciliations VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [contract.id, other_id, datetime.now(UTC).replace(tzinfo=None), *result.values()],
+    )
+    return result

@@ -338,3 +338,19 @@ not data errors. For WTI the detector flagged the rebound rather than the dip be
 the dip was not extreme against a volatile window, the rebound from an accepted low was. A
 flag points a person *near* something worth a look; it does not say which value is wrong.
 Prediction partly held (most series clean), partly not (oil flagged, gas not).
+
+## 2026-10-16: the "Two sources" page
+
+**Built.** `/sources`: for each series carried by two channels (WTI, Brent, Henry Hub),
+both channels on one chart, with the spreadsheet's line broken where it lost dates and a
+row of ticks per class of difference under it; every difference grouped in plain words
+(dropped from the spreadsheet, only ever in the API, holiday fills, only in the
+spreadsheet, values that differ), each clickable to list its dates; and when the history
+saw the spreadsheet lose values, bounded by the two copies either side. Each
+reconciliation's counts are now kept in `meta.reconciliations`, so matches are shown
+too. 121 tests.
+
+**What it shows.** Across the three series: 24,318 dates agree exactly, 3 values differ,
+3,434 dates exist only in the API and 19 only in the spreadsheets. For Henry Hub, the
+1,768 dropped prices form a solid band from 1997 to 2011, removed between the archive
+copy of 2026-05-05 and the first download on 2026-10-15.

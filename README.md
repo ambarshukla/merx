@@ -12,7 +12,8 @@ trustworthy.
 
 ## Consoles
 
-`merx serve`, then open <http://127.0.0.1:8000/ops> and <http://127.0.0.1:8000/client>.
+`merx serve`, then open <http://127.0.0.1:8000/client>, <http://127.0.0.1:8000/sources>
+and <http://127.0.0.1:8000/ops>.
 
 **Operations** (`/ops`): every dataset's publication status, checks on the current
 build, open exceptions with owners and root causes, values gone missing, reconciliation
@@ -26,6 +27,13 @@ US crude stocks as known on 2016-06-01 (dashed) against today: the 2016 redefini
 of the whole history.
 
 ![Client view, as known on 2016-06-01](docs/img/client-as-known-on.png)
+
+**Two sources** (`/sources`): the three daily spot prices come through two channels, EIA's
+spreadsheet and EIA's API. Both are drawn on one chart, every difference is classified,
+and the history shows when the spreadsheet lost values. Below, Henry Hub: the red band is
+1,768 prices (1997 to 2011) that the spreadsheet dropped in 2026 and the API still has.
+
+![Two sources: Henry Hub](docs/img/two-sources.png)
 
 ## What runs today
 

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>merx · two sources</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>merx</h1><span class="sub">one series, two channels, every difference explained</span>
+  <nav><a href="/client">Data</a><a class="here" href="/sources">Two sources</a><a href="/ops">Operations</a></nav>
+</header>
+<main>
+  <section class="panel">
+    <div class="small">
+      EIA publishes the same daily spot prices in two places: a <b>spreadsheet</b> download
+      and an <b>API</b>. merx takes both, compares them value by value (a
+      <b>reconciliation</b>), and keeps every past version of the spreadsheet. Where both
+      channels have a date, their values agree almost everywhere; what differs is
+      <b>which dates exist</b>. Between May and October 2026 the spreadsheets lost thousands
+      of older prices that the API still serves.
+    </div>
+    <div class="kpis" id="kpis" style="margin-top:14px"></div>
+  </section>
+
+  <section class="row" id="tabs"></section>
+
+  <section class="panel">
+    <div class="row" style="justify-content: space-between">
+      <div>
+        <h2 id="title" style="margin-bottom:2px"></h2>
+        <div class="small muted" id="subtitle"></div>
+      </div>
+      <span class="row" id="ranges">
+        <button data-years="0">All</button><button data-years="15">15Y</button>
+        <button data-years="5">5Y</button>
+      </span>
+    </div>
+    <div class="legend" id="legend" style="margin-top:10px"></div>
+    <div class="chart" id="chart" style="height:420px"></div>
+    <div class="small muted">Gaps in the spreadsheet line are dates it no longer has. Each
+      tick in the rows under the chart is one date in that class.</div>
+  </section>
+
+  <section class="grid">
+    <div class="panel">
+      <h2>What differs</h2>
+      <div id="groups"></div>
+    </div>
+    <div class="panel">
+      <h2>When the spreadsheet lost values</h2>
+      <div class="small muted" style="margin-bottom:8px">From the point-in-time history: every
+        download, plus dated copies from the Internet Archive's Wayback Machine. A removal is
+        known to have happened between two copies.</div>
+      <div id="removals"></div>
+      <h2 style="margin-top:18px">Dates in this class</h2>
+      <div class="small muted" id="detail-label">Click a class on the left.</div>
+      <div id="detail"></div>
+    </div>
+  </section>
+</main>
+<script src="/static/chart.js"></script>
+<script>
+"use strict";
+const COLORS = { dropped: "--bad", api_only: "--accent-2", api_fill: "--muted",
+  here_only: "--warn", differs: "--accent" };
+const SHORT = { dropped: "dropped", api_only: "API only", api_fill: "holiday fill",
+  here_only: "sheet only", differs: "differ" };
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let pairs = [], data = null, years = 0;
+
+async function load() {
+  pairs = await getJSON("/api/client/sources");
+  const total = (k) => pairs.reduce((a, p) => a + (p.counts?.[k] || 0), 0);
+  const kpi = (v, l) => `<div class="kpi"><div class="v">${v.toLocaleString()}</div><div class="l">${l}</div></div>`;
+  document.getElementById("kpis").innerHTML = [
+    kpi(pairs.length, "series in two channels"),
+    kpi(total("match"), "dates that agree exactly"),
+    kpi(total("value_differs"), "values that differ"),
+    kpi(total("only_there"), "dates only in the API"),
+    kpi(total("only_here"), "dates only in the spreadsheet"),
+  ].join("");
+  document.getElementById("tabs").innerHTML = pairs.map((p) =>
+    `<button data-id="${p.id}">${esc(p.title.split(",")[0])}</button>`).join("");
+  document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => show(b.dataset.id)));
+  document.querySelectorAll("#ranges button").forEach((b) =>
+    (b.onclick = () => { years = +b.dataset.years; draw(); }));
+  window.addEventListener("resize", () => data && draw());
+  const start = new URLSearchParams(location.search).get("dataset");
+  show(pairs.some((p) => p.id === start) ? start : "eia_henry_hub_spot");
+}
+
+async function show(id) {
+  document.querySelectorAll("#tabs button").forEach((b) =>
+    (b.style.fontWeight = b.dataset.id === id ? "700" : ""));
+  data = await getJSON(`/api/client/sources/${id}`);
+  document.getElementById("title").textContent = data.title;
+  const p = pairs.find((x) => x.id === id);
+  const c = p.counts || {};
+  document.getElementById("subtitle").textContent =
+    `spreadsheet (${data.id}) against API (${data.other}) · ${(c.match || 0).toLocaleString()} ` +
+    `dates agree exactly · ${c.value_differs || 0} differ · reconciled ` +
+    `${(c.reconciled_at_utc || "").slice(0, 16).replace("T", " ")} UTC`;
+  renderGroups();
+  renderRemovals();
+  draw();
+}
+
+function since(yearsBack) {
+  if (!yearsBack || !data.there.length) return null;
+  const d = new Date(data.there[data.there.length - 1][0] + "T00:00:00Z");
+  d.setUTCFullYear(d.getUTCFullYear() - yearsBack);
+  return d.toISOString().slice(0, 10);
+}
+
+function draw() {
+  const start = since(years);
+  const keep = (pts) => (start ? pts.filter(([d]) => d >= start) : pts);
+  // Break the spreadsheet line where it lost dates, so the API line shows alone there.
+  const dropped = new Set(data.groups.find((g) => g.key === "dropped").rows.map((r) => r[0]));
+  const here = [...data.here, ...[...dropped].map((d) => [d, null])]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const series = [
+    { name: "API", color: css("--accent-2"), points: keep(data.there) },
+    { name: "spreadsheet", color: css("--accent"), points: keep(here) },
+  ];
+  const marks = data.groups.filter((g) => g.count).map((g) => ({
+    label: SHORT[g.key], color: css(COLORS[g.key]), dates: g.rows.map((r) => r[0]),
+  }));
+  document.getElementById("legend").innerHTML = series.map((s) =>
+    `<span><i style="background:${s.color}"></i>${s.name}</span>`).join("");
+  lineChart(document.getElementById("chart"), series, { unit: data.unit, marks });
+}
+
+function renderGroups() {
+  document.getElementById("groups").innerHTML = `<table><tbody>${data.groups.map((g) => `
+    <tr class="clickable" data-key="${g.key}"><td><span class="badge" style="background:transparent;
+      color:${css(COLORS[g.key])};border:1px solid ${css(COLORS[g.key])}">${SHORT[g.key]}</span></td>
+      <td>${esc(g.label)}</td><td class="num"><b>${g.count.toLocaleString()}</b></td></tr>`).join("")}
+    </tbody></table>`;
+  document.querySelectorAll("#groups tr").forEach((tr) => (tr.onclick = () => detail(tr.dataset.key)));
+  document.getElementById("detail-label").textContent = "Click a class on the left.";
+  document.getElementById("detail").innerHTML = "";
+}
+
+function renderRemovals() {
+  const big = data.removals.slice().sort((a, b) => b.values - a.values);
+  document.getElementById("removals").innerHTML = big.length ? `<table><thead><tr>
+    <th>Removed between</th><th class="num">Values</th><th>Dates covered</th></tr></thead><tbody>
+    ${big.map((r) => `<tr><td class="small">${(r.removed_between[0] || "?").slice(0, 10)} and
+      ${r.removed_between[1].slice(0, 10)}</td><td class="num"><b>${r.values.toLocaleString()}</b></td>
+      <td class="small">${r.first_date} to ${r.last_date}</td></tr>`).join("")}</tbody></table>`
+    : '<div class="muted small">No removals in the history.</div>';
+}
+
+function detail(key) {
+  const g = data.groups.find((x) => x.key === key);
+  document.getElementById("detail-label").textContent = `${g.label}: ${g.count.toLocaleString()} dates`
+    + (g.count > 200 ? " (latest 200 shown)" : "");
+  document.getElementById("detail").innerHTML = g.count ? `<table><thead><tr><th>Date</th>
+    <th class="num">Spreadsheet</th><th class="num">API</th></tr></thead><tbody>
+    ${g.rows.slice(-200).reverse().map(([d, h, t]) => `<tr><td>${d}</td>
+      <td class="num">${h ?? "–"}</td><td class="num">${t ?? "–"}</td></tr>`).join("")}</tbody></table>`
+    : '<div class="muted small">None.</div>';
+}
+
+load().catch((e) => { document.querySelector("main").innerHTML = `<pre>${esc(e)}</pre>`; });
+</script>
+</body>
+</html>
