@@ -30,11 +30,13 @@ function fmt(v) {
 }
 
 // series: [{name, color, dash, points: [[isoDate, value], ...]}]
-function lineChart(container, series, { unit = "" } = {}) {
+// marks: [{label, color, dates: [isoDate, ...]}], drawn as rows of ticks under the lines.
+function lineChart(container, series, { unit = "", marks = [] } = {}) {
   container.innerHTML = "";
   const box = container.getBoundingClientRect();
   const W = Math.max(box.width, 300), H = Math.max(box.height, 200);
-  const m = { l: 64, r: 16, t: 12, b: 28 };
+  const band = 12;
+  const m = { l: 64, r: 16, t: 12, b: 28 + marks.length * band };
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, container);
   const tip = document.createElement("div");
   tip.className = "tip";
@@ -90,6 +92,21 @@ function lineChart(container, series, { unit = "" } = {}) {
     el("path", { d, fill: "none", stroke: s.color, "stroke-width": 1.4,
       "stroke-dasharray": s.dash || "", "stroke-linejoin": "round" }, svg);
   }
+
+  // One row of ticks per mark group, between the plot and the year labels.
+  marks.forEach((g, r) => {
+    const top = H - 28 - (marks.length - r) * band + 2;
+    el("text", { x: m.l - 8, y: top + 8, "text-anchor": "end", fill: g.color,
+      "font-size": 10 }, svg).textContent = g.label;
+    let d = "";
+    for (const iso of g.dates) {
+      const t = Date.parse(iso + "T00:00:00Z");
+      if (t < x0 || t > x1) continue;
+      const x = X(t).toFixed(1);
+      d += `M${x} ${top}L${x} ${top + band - 3}`;
+    }
+    el("path", { d, stroke: g.color, "stroke-width": 1, "stroke-opacity": 0.8 }, svg);
+  });
 
   const cursor = el("line", { y1: m.t, y2: H - m.b, stroke: "currentColor",
     "stroke-opacity": 0.3, visibility: "hidden" }, svg);

@@ -5,6 +5,7 @@ process write a database file at a time, so while a pipeline run is writing, a r
 briefly fail to open the file; it is retried a few times before giving up.
 """
 
+import bisect
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -336,3 +337,153 @@ def revisions(store: Store, contract: Contract, measure: str, limit: int = 200) 
         ["valid_date", "first_value", "latest_value", "versions", "first_changed_utc",
          "withdrawn", "present_now"],
     )  # fmt: skip
+
+
+# --- two sources: one series through two channels ----------------------------------------
+
+
+def reconciled_pairs(store: Store, contracts: list[Contract]) -> list[dict]:
+    """Datasets reconciled with a second channel, with the latest counts."""
+    by_id = {c.id: c for c in contracts}
+    latest = {}
+    if store.has("meta", "reconciliations"):
+        latest = {
+            r[0]: r[1:]
+            for r in store.query(
+                "SELECT dataset_id, match, value_differs, only_here, only_there, "
+                "outside_range, reconciled_at_utc FROM meta.reconciliations "
+                "QUALIFY row_number() OVER "
+                "(PARTITION BY dataset_id ORDER BY reconciled_at_utc DESC) = 1"
+            )
+        }
+    out = []
+    for c in contracts:
+        if c.reconcile_with is None:
+            continue
+        other = by_id[c.reconcile_with.dataset]
+        counts = latest.get(c.id)
+        out.append(
+            {
+                "id": c.id,
+                "title": c.title,
+                "other": other.id,
+                "other_title": other.title,
+                "unit": c.unit,
+                "counts": None
+                if counts is None
+                else dict(
+                    zip(
+                        [
+                            "match",
+                            "value_differs",
+                            "only_here",
+                            "only_there",
+                            "outside_range",
+                            "reconciled_at_utc",
+                        ],
+                        map(_iso, counts),
+                        strict=True,
+                    )
+                ),  # fmt: skip
+            }
+        )
+    return out
+
+
+def two_sources(store: Store, contract: Contract, other: Contract) -> dict:
+    """Both channels' published series, every difference grouped in plain classes, and
+    when the history saw values removed."""
+    m = contract.measures[0]
+
+    def series(c: Contract) -> list[list]:
+        if not store.has("published", c.id):
+            return []
+        return [
+            [d.isoformat(), v]
+            for d, v in store.query(
+                f'SELECT valid_date, value FROM published."{c.id}" '
+                "WHERE measure = ? ORDER BY valid_date",
+                [m],
+            )
+        ]
+
+    groups: dict[str, list] = {
+        "dropped": [], "api_only": [], "api_fill": [], "here_only": [], "differs": [],
+    }  # fmt: skip
+    timeline: list[dict] = []
+    if store.has("recon", contract.id):
+        withdrawn = set()
+        if store.has("pit", contract.id):
+            withdrawn = {
+                d
+                for (d,) in store.query(
+                    f'SELECT DISTINCT valid_date FROM pit."{contract.id}" '
+                    "WHERE ended_by = 'withdrawn' AND measure = ?",
+                    [m],
+                )
+            }
+        there_values = dict(
+            store.query(
+                f'SELECT valid_date, value FROM staged."{other.id}" WHERE measure = ?', [m]
+            )
+        ) if store.has("staged", other.id) else {}  # fmt: skip
+        there_dates = sorted(there_values)
+
+        for d, cls, here, there in store.query(
+            f'SELECT valid_date, class, value_here, value_there FROM recon."{contract.id}" '
+            "WHERE measure = ? ORDER BY valid_date",
+            [m],
+        ):
+            row = [d.isoformat(), here, there]
+            if cls == "value_differs":
+                groups["differs"].append(row)
+            elif cls == "only_here":
+                groups["here_only"].append(row)
+            elif cls == "only_there":
+                if d in withdrawn:
+                    groups["dropped"].append(row)
+                else:
+                    i = bisect.bisect_left(there_dates, d) - 1
+                    prev = there_values[there_dates[i]] if i >= 0 else None
+                    groups["api_fill" if prev == there else "api_only"].append(row)
+        if store.has("pit", contract.id) and store.has("meta", "raw_manifest"):
+            for known_to, n, first, last in store.query(
+                f"SELECT known_to_utc, count(*), min(valid_date), max(valid_date) "
+                f"FROM pit.\"{contract.id}\" WHERE ended_by = 'withdrawn' AND measure = ? "
+                "GROUP BY 1 ORDER BY 1",
+                [m],
+            ):
+                (before,) = store.query(
+                    "SELECT max(fetched_at_utc) FROM meta.raw_manifest "
+                    "WHERE dataset_id = ? AND fetched_at_utc < ?",
+                    [contract.id, known_to],
+                )[0]
+                timeline.append(
+                    {
+                        "removed_between": [_iso(before), _iso(known_to)],
+                        "values": n,
+                        "first_date": _iso(first),
+                        "last_date": _iso(last),
+                    }
+                )
+    labels = {
+        "dropped": "Dropped from the spreadsheet: known before, missing now, still in the API",
+        "api_only": "Only ever in the API",
+        "api_fill": "Only in the API, repeating the previous day's value (a holiday fill)",
+        "here_only": "Only in the spreadsheet",
+        "differs": "In both, with different values",
+    }
+    return {
+        "id": contract.id,
+        "title": contract.title,
+        "other": other.id,
+        "other_title": other.title,
+        "unit": contract.unit,
+        "measure": m,
+        "here": series(contract),
+        "there": series(other),
+        "groups": [
+            {"key": k, "label": labels[k], "count": len(v), "rows": v} for k, v in groups.items()
+        ],
+        "removals": timeline,
+    }
