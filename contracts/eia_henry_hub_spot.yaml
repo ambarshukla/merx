@@ -23,3 +23,4 @@ checks:
   - {type: unique, columns: [measure, valid_date]}
   - {type: range, column: value, min: -10, max: 100}
   - {type: freshness, max_age_days: 10}
+  - {type: no_withdrawals}

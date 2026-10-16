@@ -15,9 +15,11 @@ from merx.contracts.model import (
     Check,
     FreshnessCheck,
     NotNullCheck,
+    NoWithdrawalsCheck,
     RangeCheck,
     UniqueCheck,
 )
+from merx.engine import withdrawals
 
 _EXAMPLES = 20
 
@@ -144,8 +146,36 @@ def _balance(con: duckdb.DuckDBPyConnection, table: str, check: BalanceCheck) ->
     )
 
 
+def _no_withdrawals(
+    con: duckdb.DuckDBPyConnection, table: str, dataset_id: str | None
+) -> CheckOutcome:
+    if dataset_id is None:
+        raise ValueError("the no_withdrawals check needs the dataset id")
+    rows = withdrawals.missing(con, dataset_id, table)
+    if rows is None:
+        return CheckOutcome(True, "no history yet to compare against", {"missing": 0})
+    unaccepted = [r for r in rows if not r[4]]
+    return CheckOutcome(
+        passed=not unaccepted,
+        description=f"{len(unaccepted)} previously known values missing from this build"
+        + (f" ({len(rows) - len(unaccepted)} accepted)" if len(rows) > len(unaccepted) else ""),
+        metadata={
+            "missing_unaccepted": len(unaccepted),
+            "missing_accepted": len(rows) - len(unaccepted),
+            "examples": [
+                [m, d.isoformat(), v, seen.isoformat()]
+                for m, d, v, seen, _ in unaccepted[:_EXAMPLES]
+            ],
+        },
+    )
+
+
 def run_check(
-    con: duckdb.DuckDBPyConnection, table: str, check: Check, today: date
+    con: duckdb.DuckDBPyConnection,
+    table: str,
+    check: Check,
+    today: date,
+    dataset_id: str | None = None,
 ) -> CheckOutcome:
     match check:
         case NotNullCheck():
@@ -158,4 +188,6 @@ def run_check(
             return _freshness(con, table, check, today)
         case BalanceCheck():
             return _balance(con, table, check)
+        case NoWithdrawalsCheck():
+            return _no_withdrawals(con, table, dataset_id)
     raise TypeError(f"unknown check: {check!r}")

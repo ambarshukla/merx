@@ -69,3 +69,4 @@ checks:
     total: open_interest
     parts: [producer_short, swap_short, managed_money_short, other_reportable_short,
             nonreportable_short, swap_spread, managed_money_spread, other_reportable_spread]
+  - {type: no_withdrawals}

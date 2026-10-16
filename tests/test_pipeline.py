@@ -81,6 +81,7 @@ def test_clean_file_lands_stages_and_passes_every_check(tmp_path):
         "unique_measure_valid_date": True,
         "range_value": True,
         "freshness": True,
+        "no_withdrawals": True,
     }
     rows = query(
         tmp_path,

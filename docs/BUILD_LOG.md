@@ -204,3 +204,15 @@ range and freshness all judge only the rows that are present. Silent disappearan
 a different kind of check. Next: a check that fails when a build withdraws previously
 known values (the point-in-time store already detects them), and a reconciliation of
 the spreadsheet against the API.
+
+## 2026-10-16: no silent withdrawals, and an operations command
+
+**Built.** The `no_withdrawals` check (D-011), now in every contract; acceptances in
+`ops.accepted_withdrawals`; and `merx`, a command for the operations tasks a person does
+by hand: list exceptions, assign a root cause, list and accept missing values, list
+revisions, and show a dataset as known at any moment. 108 tests.
+
+**Live run.** Prediction: WTI fails with about 744 missing values and is blocked;
+everything else passes. Result: exactly that. Exception 2 (`eia_wti_spot`,
+`no_withdrawals`) was classified `source_data_error`; the values were deliberately not
+accepted, pending a reconciliation against EIA's API.
