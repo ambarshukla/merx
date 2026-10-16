@@ -109,6 +109,17 @@ class FreshnessCheck(_Strict):
     severity: Severity = "error"
 
 
+class AnomalyCheck(_Strict):
+    """Run one of the lab's recommended detectors (docs/DQ_LAB.md) over each measure and
+    fail if it flags any of the newest ``lookback`` values. Warning-level by default: the
+    lab measured precision near 87%, so about one flag in eight is a false alarm."""
+
+    type: Literal["anomaly"]
+    detector: Literal["seasonal_suite", "robust_suite", "static_band"]
+    lookback: int = Field(default=20, gt=0)
+    severity: Severity = "warn"
+
+
 class NoWithdrawalsCheck(_Strict):
     """Every value ever known must still be in the build, unless a person has accepted
     its removal (``ops.accepted_withdrawals``). Checks on the rows present cannot see
@@ -131,7 +142,13 @@ class BalanceCheck(_Strict):
 
 
 Check = Annotated[
-    NotNullCheck | UniqueCheck | RangeCheck | FreshnessCheck | BalanceCheck | NoWithdrawalsCheck,
+    NotNullCheck
+    | UniqueCheck
+    | RangeCheck
+    | FreshnessCheck
+    | BalanceCheck
+    | NoWithdrawalsCheck
+    | AnomalyCheck,
     Field(discriminator="type"),
 ]
 
@@ -198,6 +215,8 @@ def check_name(check: Check) -> str:
             return "freshness"
         case BalanceCheck(name=name):
             return f"balance_{name}"
+        case AnomalyCheck(detector=detector):
+            return f"anomaly_{detector}"
         case NoWithdrawalsCheck():
             return "no_withdrawals"
     raise TypeError(f"unknown check: {check!r}")

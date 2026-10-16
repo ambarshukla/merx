@@ -29,3 +29,5 @@ checks:
   # EIA refreshes this file about weekly, so the newest value can be several days old.
   - {type: freshness, max_age_days: 10}
   - {type: no_withdrawals}
+  # The lab's recommended detector for this series (docs/DQ_LAB.md); warning only.
+  - {type: anomaly, detector: seasonal_suite}

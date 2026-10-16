@@ -27,3 +27,5 @@ checks:
   - {type: range, column: value, min: -100, max: 300}
   - {type: freshness, max_age_days: 10}
   - {type: no_withdrawals}
+  # The lab's recommended detector for this series (docs/DQ_LAB.md); warning only.
+  - {type: anomaly, detector: seasonal_suite}

@@ -59,7 +59,7 @@ raw/eia_wti_spot        download, keep the file untouched in data/raw/, record i
         ▼
 staged/eia_wti_spot     parse strictly, rebuild staged."eia_wti_spot", then run the contract's
         │               checks on that build: not_null_value, unique_measure_valid_date,
-        │               range_value, freshness, no_withdrawals. Failures open exceptions
+        │               range_value, freshness, no_withdrawals, anomaly_*. Failures open exceptions
         │               (ops.exceptions).
         ▼
 published/eia_wti_spot  the gate: tier 1 publishes only if no error-level check failed;

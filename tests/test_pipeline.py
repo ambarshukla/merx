@@ -82,6 +82,7 @@ def test_clean_file_lands_stages_and_passes_every_check(tmp_path):
         "range_value": True,
         "freshness": True,
         "no_withdrawals": True,
+        "anomaly_seasonal_suite": True,
     }
     rows = query(
         tmp_path,

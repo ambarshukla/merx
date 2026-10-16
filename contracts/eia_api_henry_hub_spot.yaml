@@ -29,3 +29,5 @@ checks:
   - {type: range, column: value, min: -10, max: 100}
   - {type: freshness, max_age_days: 10}
   - {type: no_withdrawals}
+  # The lab found the robust suite catches more on volatile gas prices (docs/DQ_LAB.md).
+  - {type: anomaly, detector: robust_suite}

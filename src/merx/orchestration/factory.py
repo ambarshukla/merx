@@ -361,7 +361,12 @@ def run_contract_checks(
     try:
         for check in contract.checks:
             outcome = run_check(
-                con, staged_table(contract), check, datetime.now(UTC).date(), contract.id
+                con,
+                staged_table(contract),
+                check,
+                datetime.now(UTC).date(),
+                contract.id,
+                contract.frequency,
             )
             change = ops.record(
                 con,

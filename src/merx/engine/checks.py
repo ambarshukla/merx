@@ -11,6 +11,7 @@ from datetime import date
 import duckdb
 
 from merx.contracts.model import (
+    AnomalyCheck,
     BalanceCheck,
     Check,
     FreshnessCheck,
@@ -20,6 +21,7 @@ from merx.contracts.model import (
     UniqueCheck,
 )
 from merx.engine import withdrawals
+from merx.quality.detectors import NAMED
 
 _EXAMPLES = 20
 
@@ -170,12 +172,44 @@ def _no_withdrawals(
     )
 
 
+def _anomaly(
+    con: duckdb.DuckDBPyConnection, table: str, check: AnomalyCheck, frequency: str
+) -> CheckOutcome:
+    detector = NAMED[check.detector]
+    rows = con.execute(
+        f"SELECT measure, valid_date, value FROM {table} WHERE value IS NOT NULL "
+        "ORDER BY measure, valid_date"
+    ).fetchall()
+    series: dict[str, list[tuple[date, float]]] = {}
+    for measure, d, v in rows:
+        series.setdefault(measure, []).append((d, v))
+    recent: list[tuple[str, date, float]] = []
+    in_history = 0
+    for measure, points in series.items():
+        flags = detector.detect(points, frequency)
+        in_history += len(flags)
+        newest = {d for d, _ in points[-check.lookback :]}
+        recent += [(measure, d, v) for d, v in points if d in flags and d in newest]
+    recent.sort(key=lambda r: (r[1], r[0]))
+    return CheckOutcome(
+        passed=not recent,
+        description=f"{len(recent)} of the newest {check.lookback} values flagged by "
+        f"{check.detector}",
+        metadata={
+            "recent_flags": len(recent),
+            "flags_in_full_history": in_history,
+            "examples": [[m, d.isoformat(), v] for m, d, v in recent[-_EXAMPLES:]],
+        },
+    )
+
+
 def run_check(
     con: duckdb.DuckDBPyConnection,
     table: str,
     check: Check,
     today: date,
     dataset_id: str | None = None,
+    frequency: str = "daily",
 ) -> CheckOutcome:
     match check:
         case NotNullCheck():
@@ -190,4 +224,6 @@ def run_check(
             return _balance(con, table, check)
         case NoWithdrawalsCheck():
             return _no_withdrawals(con, table, dataset_id)
+        case AnomalyCheck():
+            return _anomaly(con, table, check, frequency)
     raise TypeError(f"unknown check: {check!r}")
