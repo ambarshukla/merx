@@ -6,11 +6,13 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import dagster as dg
+import duckdb
 import pytest
 from conftest import eia_workbook
 
 from merx.config import CONTRACTS_DIR
 from merx.contracts import ContractError, load_contract, validate_reconciliations
+from merx.engine import reconcile
 from merx.orchestration.factory import build_assets
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import load_reference
@@ -106,12 +108,12 @@ def test_negative_price_and_missing_value_survive():
 
 def test_reconcile_target_must_exist_and_match():
     with pytest.raises(ContractError, match="unknown dataset"):
-        validate_reconciliations([XLS])
+        validate_reconciliations([XLS], load_reference())
     brent = load_contract(CONTRACTS_DIR / "eia_brent_spot.yaml")
     renamed = brent.model_copy(update={"id": "eia_api_wti_spot"})
     with pytest.raises(ContractError, match="instrument differs"):
-        validate_reconciliations([XLS, renamed])
-    validate_reconciliations([XLS, API])
+        validate_reconciliations([XLS, renamed], load_reference())
+    validate_reconciliations([XLS, API], load_reference())
 
 
 # --- end to end ----------------------------------------------------------------------
@@ -182,3 +184,61 @@ def test_two_sources_view_groups_every_difference(tmp_path, monkeypatch):
     assert len(view["here"]) == 6 and len(view["there"]) == 8
     assert client.get("/api/client/sources/eia_us_gas_storage").status_code == 404
     assert "two channels" in client.get("/sources").text
+
+
+# --- comparing two institutions rather than two channels -------------------------
+
+
+def monthly_pair(con):
+    """A monthly series and a daily one for the same commodity."""
+    con.execute("CREATE SCHEMA IF NOT EXISTS staged")
+    con.execute(
+        'CREATE TABLE staged."monthly" (measure VARCHAR, valid_date DATE, '
+        "period INTEGER, value DOUBLE)"
+    )
+    con.execute(
+        'CREATE TABLE staged."daily" (measure VARCHAR, valid_date DATE, '
+        "period INTEGER, value DOUBLE)"
+    )
+    return con
+
+
+def test_a_monthly_series_is_compared_with_the_mean_of_a_daily_one():
+    con = monthly_pair(duckdb.connect())
+    con.execute("INSERT INTO staged.\"monthly\" VALUES ('price', '2026-01-01', 0, 10.0)")
+    # Twenty days averaging exactly 10.0.
+    con.executemany(
+        "INSERT INTO staged.\"daily\" VALUES ('price', ?, 0, ?)",
+        [[f"2026-01-{d:02d}", 10.0 + (1 if d % 2 else -1)] for d in range(1, 21)],
+    )
+    sql = reconcile._other_source("daily", "monthly_mean", 15)
+    rows = con.execute(sql).fetchall()
+    assert rows == [("price", date(2026, 1, 1), 0, 10.0)]
+    con.close()
+
+
+def test_a_thinly_observed_month_is_not_compared_at_all():
+    """A month with a handful of prices has no meaningful average. This is not
+    hypothetical: 35 months lost enough days to EIA's withdrawn values that they can
+    no longer be compared with the World Bank's monthly figure."""
+    con = monthly_pair(duckdb.connect())
+    con.executemany(
+        "INSERT INTO staged.\"daily\" VALUES ('price', ?, 0, 10.0)",
+        [[f"2026-01-{d:02d}"] for d in range(1, 12)],  # 11 days
+    )
+    assert con.execute(reconcile._other_source("daily", "monthly_mean", 15)).fetchall() == []
+    # The same month passes once enough days are present.
+    con.executemany(
+        "INSERT INTO staged.\"daily\" VALUES ('price', ?, 0, 10.0)",
+        [[f"2026-01-{d:02d}"] for d in range(12, 20)],
+    )
+    assert len(con.execute(reconcile._other_source("daily", "monthly_mean", 15)).fetchall()) == 1
+    con.close()
+
+
+def test_exact_alignment_is_unchanged():
+    con = monthly_pair(duckdb.connect())
+    con.execute("INSERT INTO staged.\"daily\" VALUES ('price', '2026-01-02', 0, 7.0)")
+    rows = con.execute(reconcile._other_source("daily", "exact", 15)).fetchall()
+    assert rows == [("price", date(2026, 1, 2), 0, 7.0)]
+    con.close()

@@ -396,7 +396,14 @@ def build_history_assets(contract: Contract) -> list[dg.AssetsDefinition]:
         def reconcile_asset(store: DataStore) -> dg.MaterializeResult:
             con = connect(store.path)
             try:
-                counts = reconcile.reconcile(con, contract, other, tolerance)
+                counts = reconcile.reconcile(
+                    con,
+                    contract,
+                    other,
+                    tolerance,
+                    align=contract.reconcile_with.align,
+                    min_observations=contract.reconcile_with.min_observations,
+                )
             finally:
                 con.close()
             breaks = sum(counts[c] for c in reconcile.BREAK_CLASSES)

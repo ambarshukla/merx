@@ -130,9 +130,26 @@ class Schedule(_Strict):
 
 
 class ReconcileWith(_Strict):
+    """Another dataset carrying the same quantity, to be compared value by value.
+
+    Two situations, and the tolerance is what separates them. Two **channels** of one
+    publisher — a spreadsheet and an API — should agree exactly, so the tolerance is
+    zero and any difference is a fault. Two **institutions** computing the same
+    quantity will not agree exactly, because their methods differ; there a tolerance
+    says how far apart is unremarkable, and the job is to notice when they drift
+    further.
+    """
+
     dataset: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     # Largest absolute difference still counted as a match.
     tolerance: float = Field(default=0.0, ge=0)
+    # How to line the two up when they are not on the same clock. "exact" needs the
+    # same date; "monthly_mean" averages the other dataset's values within each month
+    # and compares that with this dataset's value for the month.
+    align: Literal["exact", "monthly_mean"] = "exact"
+    # Months with fewer than this many underlying observations are not compared: a
+    # month with three prices in it has no meaningful average.
+    min_observations: int = Field(default=15, ge=1)
 
 
 class NotNullCheck(_Strict):
