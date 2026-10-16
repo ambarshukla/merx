@@ -454,3 +454,53 @@ enough until a sector needs attributes of its own).
 **Consequences.** A dataset may mix units, which the client has to show per measure
 rather than once per dataset. Unit *conversion* is deliberately not built: it waits for
 the first source that needs the same quantity compared across units.
+
+## D-019: One clock for Great Britain, derived where a source does not state it (2026-10-16)
+
+**Context.** The two GB sources describe the same half hours differently. Elexon states a
+settlement date and a period number. The carbon intensity API publishes UTC half-hour
+windows and never mentions periods. Comparing them — the whole point of having both — is
+only possible if they end up on one clock.
+
+**Decision.** `merx.sources.gb` owns the rule: a settlement period is counted in elapsed
+local time since local midnight, so a day holds 46, 48 or 50 of them. Elexon's stated
+values are used as given but **checked** against the rule, and a disagreement fails the
+parse. The carbon API's periods are derived with the same rule. Elapsed time is used
+rather than wall-clock arithmetic because on the autumn day 01:30 happens twice, and an
+hour-of-day calculation would collide the two into one period.
+
+**Alternatives considered.** Trusting each provider's own convention (no shared clock, so
+no comparison); storing UTC timestamps and deriving periods at query time (pushes the
+hard part into every query, and the ambiguous hour stays ambiguous); using Elexon as the
+authority and joining the carbon data by timestamp (works until a clock-change day).
+
+**Consequences.** The derivation was verified against Elexon rather than assumed: 46
+periods for 2026-03-29, 50 for 2025-10-26, 48 otherwise, and 23:00Z in summer is period
+1 of the next settlement day — all matching Elexon's own output. Both GB datasets can be
+joined half hour by half hour. A provider that changes convention breaks loudly instead
+of shifting every value by thirty minutes.
+
+## D-020: One contract per commodity, and units checked against the file (2026-10-16)
+
+**Context.** The World Bank's Pink Sheet is a single monthly spreadsheet holding about
+seventy commodities across three sectors, each in its own column and its own unit. A
+dataset in merx has one instrument, so a single contract covering the whole sheet would
+have to abandon the instrument and crosswalk model that everything else relies on.
+
+**Decision.** Each commodity is its own contract reading its own column, named by
+`series_key`, with its own instrument and crosswalk entry. The format is treated as
+single-series. Separately, because the file states each column's unit on a header row,
+the reader compares that against the contract's declared unit and fails on a mismatch.
+
+**Alternatives considered.** One contract with a measure per commodity (fewer downloads,
+but one instrument cannot describe copper and wheat, and the crosswalk would have
+nothing to key on); a shared "source" asset feeding many contracts (saves the duplicate
+downloads at the cost of shared state between pipelines, which is the thing this design
+avoids); trusting the stated units (a benchmark repriced from $/mt to $/kg rescales a
+series by a thousand and still looks plausible).
+
+**Consequences.** Eight datasets were added as configuration, with no code beyond the one
+reader, and the catalogue reached all six sectors. Each contract keeps its own copy of
+the 586 KB file, about 19 MB a month in total; that duplication is the price of one
+contract per pipeline and is the clearest argument yet for the recorded follow-up of
+deduplicating identical raw downloads by checksum.
