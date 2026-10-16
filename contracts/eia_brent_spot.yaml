@@ -13,9 +13,13 @@ source:
   format: eia_hist_xls
   url: https://www.eia.gov/dnav/pet/hist_xls/RBRTEd.xls
   series_key: RBRTE
+  # Backfill history from dated copies in the Wayback Machine (probed 2026-10-16).
+  archive_backfill: true
 schedule:
   cron: "30 18 * * 1-5"
   timezone: America/New_York
+# Compare every value with the same series from EIA's API (D-012).
+reconcile_with: {dataset: eia_api_brent_spot}
 checks:
   - {type: not_null, column: value}
   - {type: unique, columns: [measure, valid_date]}

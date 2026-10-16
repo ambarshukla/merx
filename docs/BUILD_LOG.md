@@ -275,3 +275,51 @@ value. Links can carry the series and date, e.g.
 2012-11-30: the archive holds no copies from 2013 or 2014, so nothing newer was known to
 the history then. Correct, but a reminder that archive-based history is only as dense as
 the archive's copies.
+
+## 2026-10-16: Brent and Henry Hub through a second channel; the losses are systematic
+
+**Built, by configuration only.** Two contracts (`eia_api_brent_spot`,
+`eia_api_henry_hub_spot`) and three lines each on the spreadsheet contracts
+(`reconcile_with`, `archive_backfill`). No code changed. 119 tests.
+
+**Probed first.** API rows against spreadsheet rows (2026-10-16): crude stocks 2,298 =
+2,298 and gas storage 876 = 876 (weekly series agree), but Brent 9,993 against 9,108 and
+Henry Hub 7,484 against 5,709 over the same span (both start 1997-01-07 / 1987-05-20).
+Prediction before the probe was that WTI's loss was a one-off. It was not.
+
+**Live run.**
+
+| | WTI spot | Brent spot | Henry Hub spot |
+|---|---|---|---|
+| Archive copies | 50 of 51 | 47 of 50 | 39 of 39 |
+| Values withdrawn in the big loss | 744 (1986-01-31 to 2019-11-11) | 890 (1987-12-21 to 2014-10-14) | 1,768 (1997-01-22 to 2011-07-12) |
+| When (between) | 2026-09-05 and 2026-10-11 copies | 2026-08-30 and 2026-09-17 copies | 2026-05-05 copy and our 2026-10-15 download |
+| Still in the API | all 744 | 892 of 894 withdrawn | all |
+| Reconciliation: match / value differs | 9,515 / 0 | 9,096 / **3** | 5,707 / 0 |
+| API only (besides the withdrawn) | 13 US holidays | 8 holidays, incl. UK bank holidays | (counted with the withdrawn) |
+| Spreadsheet only | 8 | 9 | 2 |
+
+- **All three daily price spreadsheets lost large parts of their older history within the
+  same few months of 2026**, while the API kept them. For Henry Hub, the spreadsheet now
+  holds 58 to 99 values a year for 1998-2006 against about 250 in the API. The cause is
+  not known and is not guessed here.
+- **The API's own gaps repeat across series**: WTI and Brent lack the same dates
+  (2014-09-30 to 2014-10-02, 2022-10-25, 2022-12-13, 2023-03-07, 2024-02-06, 2024-04-16)
+  that their spreadsheets have.
+- **Three real value disagreements** (Brent 2016-12-28, 2016-12-29, 2018-04-16): the
+  first, after more than 24,000 shared dates across the three series.
+- **A precision change**: 57 of Henry Hub's 59 revisions happened together in a copy of
+  2013-04-21, when three-decimal prices were rounded to two (2.975 became 2.98).
+- Henry Hub's 2018-01-05 gap is in both channels; the API contract accepts it by name, and
+  the exception it had opened closed on the next run (time to recover: under a minute).
+
+**Gate state:** WTI, Brent and Henry Hub spot (all tier 1) are blocked by
+`no_withdrawals`; exceptions 2, 3 and 5 carry the root cause `source_data_error`; the
+withdrawn values are not accepted, pending a decision on repairing them from the API.
+
+**Not every withdrawal is an error.** Henry Hub's eight earlier, scattered withdrawals
+are non-trading days: six Sundays removed in a copy of 2025-02-03 (2020-03-01 to
+2020-03-29, 2024-06-16) and two US holidays (Memorial Day 2015, Veterans Day 2019). They
+look like the source cleaning up, unlike the bulk losses of 2026. The check flags both
+kinds the same way, which is why accepting a withdrawal is a person's decision with a
+reason, not an automatic rule.
