@@ -38,9 +38,9 @@ all three share one data directory on the host:  raw zone · DuckDB · Dagster h
 On the host, with Docker and a reverse proxy already running:
 
 ```bash
-sudo mkdir -p /opt/merx/src /opt/merx/data && sudo chown -R "$USER" /opt/merx
-# from a checkout of the repository, on your machine:
-git archive HEAD | ssh HOST 'tar -x -C /opt/merx/src'
+sudo mkdir -p /opt/merx/data && sudo chown -R "$USER" /opt/merx
+# on the host: the source is a clone, so an update is a fetch (see "Updating")
+git clone https://github.com/ambarshukla/merx.git /opt/merx/src
 # optional: seed the data directory (raw zone and history) from a machine that has it
 tar -C data --exclude=dagster_home -cf - . | ssh HOST 'tar -x -C /opt/merx/data'
 
@@ -76,9 +76,56 @@ and the container keeps reading the old one. Then
 
 ## Updating
 
+Merging to `main` deploys, once the tests have passed: the `deploy` job in
+[`ci.yml`](../.github/workflows/ci.yml) connects to the host and asks for `deploy`, then
+checks that the public site answers. Decision D-016.
+
+The key it uses cannot get a shell on the host. `~/.ssh/authorized_keys` pins it to one
+script with a forced command, so whatever the client asks to run, sshd runs that script
+instead:
+
+```
+command="/opt/merx/bin/deploy.sh",restrict ssh-ed25519 AAAA... merx-deploy
+```
+
+A container that reports `running` is not necessarily serving — one that starts and then
+dies would pass a status check — so the script also waits (up to a minute) for the
+consoles to answer from inside the container, and the workflow then waits for the public
+URL. A deploy that cannot be reached fails rather than being recorded.
+
+`/opt/merx/bin/deploy.sh` is root-owned, world-unwritable, and deliberately **not** part
+of this repository: if it were, a push to `main` could change what the key is permitted
+to do, and the forced command would stop being a boundary. The copy on the host is the
+one that runs; it logs its own checksum to `/opt/merx/deploy.log` on every run, so drift
+from this documented version is visible. What it does:
+
 ```bash
-git archive HEAD | ssh HOST 'tar -x -C /opt/merx/src'
-ssh HOST 'cd /opt/merx/src/deploy && docker compose build && docker compose up -d web dagster'
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  deploy)
+    flock /opt/merx/.deploy.lock                      # one deploy at a time
+    cd /opt/merx/src && git fetch origin main && git reset --hard origin/main
+    cd /opt/merx/src/deploy
+    docker compose build --quiet
+    docker compose up -d web dagster
+    docker inspect -f '{{.State.Status}}' merx-web merx-dagster   # both must be running
+    docker exec merx-web python -c "...urlopen('http://127.0.0.1:8000/api/client/sources')"
+    git -C /opt/merx/src rev-parse HEAD >/opt/merx/DEPLOYED_COMMIT
+    ;;
+  *) exit 1 ;;                                        # anything else is refused, and logged
+esac
+```
+
+Two repository secrets drive it: `MERX_DEPLOY_KEY` (the private half) and
+`MERX_DEPLOY_TARGET` (`user@host` — the host is not public, so it is a secret as well).
+
+A new dataset still needs its history backfilled on the host once the deploy has landed,
+from Dagster's UI or `docker compose run --rm refresh …`: a deploy ships code, not data.
+
+By hand, if the automatic deploy is unavailable:
+
+```bash
+ssh HOST 'cd /opt/merx/src && git fetch origin main && git reset --hard origin/main \
+  && cd deploy && docker compose build && docker compose up -d web dagster'
 ```
 
 ## Operating it

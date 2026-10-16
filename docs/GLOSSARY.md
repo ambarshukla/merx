@@ -28,11 +28,13 @@ uses them.
 | **Crosswalk** | A table that maps each provider's identifier for something onto our own identifier, so data is joined on codes, not on names that can change. |
 | **Dagster** | An open-source orchestrator: it runs pipeline steps in order, on schedules, and records every run and check. |
 | **Data contract** | A declarative description of a dataset: source, schema, units, calendar, tier, release schedule, owner and rules. |
+| **Deploy key** | A key that grants a machine, rather than a person, access to one system for one purpose. Here it can start a deploy and nothing else. |
 | **DuckDB** | An analytical SQL database that runs inside the program using it and stores everything in one file. Allows one writing process per file. |
 | **EIA (U.S. Energy Information Administration)** | The statistics agency of the US Department of Energy. Publishes energy prices, stocks and production data. |
 | **Exception** | A failing check turned into a work item: owner, when it opened and closed, how often it was seen, and its root cause. |
 | **FOB (free on board)** | A price for a cargo at the point of loading, before shipping costs. |
 | **Freshness check** | Fails when the newest value in a dataset is older than a stated number of days. Looks at the data, not at the file's date. |
+| **Forced command** | A restriction on a key: the server runs one fixed program whatever the connecting client asks for, so the key cannot be used for anything else. |
 | **Futures contract** | An exchange-traded agreement to buy or sell a set quantity of a commodity at a set price on a future date. |
 | **Capture time** | When a web archive took its copy of a file. For archived copies it stands in for knowledge time, as an upper bound on when the file was public. |
 | **Ground truth** | The record of what is actually wrong, against which detectors are scored. In the lab, the manifest of seeded defects. |
@@ -68,6 +70,7 @@ uses them.
 | **Seeded defect** | A synthetic error deliberately injected into a copy of real data, and recorded, so detectors can be scored exactly. |
 | **Settlement price** | The exchange's official end-of-day price, used for margining. Distinct from the last traded price. |
 | **SHA-256** | A fingerprint of a file's bytes. Identical files share it; any change gives a different one. |
+| **Smoke test** | A quick check after a change that the thing still works at all — here, that the live site answers — before trusting anything finer. |
 | **Spot price** | The price for a commodity delivered now (within days), as opposed to a futures price for later delivery. |
 | **SPR (Strategic Petroleum Reserve)** | The US government's emergency crude oil stockpile, reported separately from commercial stocks. |
 | **Spread position** | Holding both a long and a short futures position (e.g. in different months). Counted on both sides of open interest. |
