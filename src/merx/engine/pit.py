@@ -46,7 +46,7 @@ def replay(contract: Contract, zone: RawZone) -> list[tuple]:
     rows: list[tuple] = []
     current: dict[tuple[str | None, str, date, int], _Open] = {}
     for landed in zone.history(contract.id):
-        observations = formats.read(zone.read(landed), contract).observations
+        observations = formats.read(zone.read(landed), contract, landed.partition).observations
         at = landed.fetched_at_utc
         seen: set[tuple[str | None, str, date, int]] = set()
         for obs in observations:

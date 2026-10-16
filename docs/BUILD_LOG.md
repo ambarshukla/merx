@@ -415,3 +415,39 @@ change is supposed to do — nothing.
 periods: Elexon returned 46 for 2026-03-29, 50 for 2025-10-26 and 48 for an ordinary day,
 each matching the prediction written before the probe. A timestamp key would have had to
 represent two distinct periods with the same local time on the autumn day.
+
+## 2026-10-16: power and carbon, Great Britain, every half hour
+
+**Built.** Two datasets on the new sub-daily model: `elexon_gb_power_price` (the GB
+day-ahead market index price and traded volume, from Elexon) and
+`neso_gb_carbon_intensity` (the grid's carbon intensity, **forecast and outturn**, from
+the National Grid API). Both arrive per half-hourly settlement period, both are fetched
+a month at a time, and both have their licences recorded in PROVENANCE before anything
+was published. 157 tests.
+
+**A shared clock.** Elexon states the settlement date and period; the carbon API
+publishes UTC half-hour windows and says nothing about periods, so merx derives them
+with the same rule. That is what makes the two comparable half hour by half hour — and
+the derivation is checked against Elexon's own numbers rather than trusted: it returns
+46 periods for 2026-03-29, 50 for 2025-10-26 and 48 otherwise, matching Elexon exactly,
+and 23:00Z in summer is period 1 of the *next* settlement day, as Elexon also reports.
+Where Elexon states both, merx compares them and fails if they ever disagree, because a
+provider changing convention would otherwise shift every value by half an hour.
+
+**Fetching a range the APIs will not serve.** Elexon caps a query at 7 days and the
+carbon API at about a month, while a partition here is a padded calendar month. Both are
+walked in chunks and merged into one raw file, so the raw zone keeps whole artifacts
+rather than fragments whose meaning depends on how they were split.
+
+**What the data says** (2026-03 to 2026-10, 5,177 half hours of each measure):
+- GB power ran from **−£24.93** to **£366.66** per MWh. **118 half hours priced below
+  zero** — 2.3% of them — the cheapest around midday on Sunday 2026-03-15. Negative
+  prices are not an error here; they are what happens when there is more generation than
+  the system wants.
+- Carbon intensity averaged 116 gCO2/kWh outturn against 114 forecast. The forecast
+  error has a mean of **+2.2** and a mean absolute error of **12.0** gCO2/kWh, with
+  **82.5%** of half hours within 20, and a worst case of 165. No modelling was needed to
+  measure that: the publisher gives both numbers, so accuracy is simply data.
+- The carbon API publishes forecasts about two days ahead, so the dataset legitimately
+  contains **96 rows dated in the future**, whose outturn is still empty. Freshness is
+  governed by the stalest measure, which is the outturn, so a stalled feed still shows.

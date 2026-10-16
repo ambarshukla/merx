@@ -31,11 +31,21 @@ names that appear belong to their owners and are used only to identify public so
 |---|---|---|---|
 | U.S. Energy Information Administration (EIA) | Spot prices, futures prices, weekly stocks and storage | Public bulk downloads; free API key for the API | **Confirmed 2026-10-15** ([Copyrights and Reuse](https://www.eia.gov/about/copyrights_reuse.php)): U.S. government publications are public domain and may be used and redistributed, with an acknowledgement such as "Source: U.S. Energy Information Administration (Oct 2026)". The same page notes that material contributed or licensed by third parties may still be protected; the futures prices originate with an exchange, so they are treated as local-only regardless. |
 | U.S. Commodity Futures Trading Commission (CFTC) | Commitments of Traders positioning | Public downloads (yearly zips) | **Confirmed 2026-10-16** ([Web Policy](https://www.cftc.gov/WebPolicy/index.htm)): government information on the CFTC website is public domain and may be freely distributed and copied; the CFTC asks to be acknowledged in any subsequent use. |
-| World Bank Commodity Markets | Monthly prices across many commodities and units | Public download | Open licence with attribution; to be confirmed |
+| World Bank Commodity Markets ("Pink Sheet") | Monthly benchmark prices across metals, agriculture and energy | Public download; the URL carries a release hash and is resolved from the Commodity Markets page | **Confirmed 2026-10-16** ([Data Catalog licences](https://datacatalog.worldbank.org/public-licenses)): datasets the World Bank produces are licensed CC BY 4.0, which requires credit and a note of any changes. Attribution used: *World Bank Commodity Price Data (The Pink Sheet), CC BY 4.0*. |
 | U.S. Department of Agriculture, Foreign Agricultural Service | Agricultural supply and demand | Public bulk download | U.S. government publication; to be confirmed |
-| Elexon (Great Britain) | Half-hourly power system prices | Public API, no key | Open data with attribution; to be confirmed |
-| UK carbon intensity API | Grid carbon intensity, forecast and actual | Public API, no key | Open licence with attribution; to be confirmed |
+| Elexon (Great Britain) | Half-hourly day-ahead power price and traded volume | Public API, no key | **Confirmed 2026-10-16** ([Licence to use BMRS open data](https://www.elexon.co.uk/data/balancing-mechanism-reporting-agent/copyright-licence-bmrs-data/)): a worldwide, royalty-free, perpetual, non-exclusive licence to copy, publish, distribute and adapt the data, including commercially, provided it is attributed and no endorsement is implied. Attribution used: *Contains BMRS data © Elexon Limited copyright and database right 2026*. |
+| National Grid carbon intensity API (Great Britain) | Half-hourly grid carbon intensity, forecast and outturn | Public API, no key | **Confirmed 2026-10-16**: the API's own documentation states it is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), which permits redistribution with attribution. |
 | Internet Archive, Wayback Machine | Dated past copies of the EIA files above, for point-in-time history | Public capture index and copies; fetched politely (one request at a time, paused) | The copies are of public-domain EIA files; knowledge times taken from capture times are labelled as such. Kept local like every other download. |
 
 "To be confirmed" means the terms have not yet been read and recorded here. Until they
 are, nothing derived from that source is published.
+
+## Sources deliberately not used
+
+Being able to say what was left out, and why, is part of handling data responsibly.
+
+| Source | Why not |
+|---|---|
+| LME (metals), Platts and Argus (assessments), ICE and EEX (carbon and energy settlements), CME (settlements) | Licensed benchmarks. Redistribution requires a commercial agreement, so they are not used at all, and no attempt is made to approximate them from other data. |
+| LBMA gold price | Same: a licensed benchmark. The World Bank's monthly gold price is used instead, which is a different thing and is labelled as such. |
+| IMF Primary Commodity Prices | Looked at on 2026-10-16 as a second institution to reconcile the World Bank against. The dataset's own metadata states "© International Monetary Fund Copyright. All Rights Reserved", and the current reuse terms could not be verified, so nothing from it is downloaded or published. The cross-source comparison uses sources whose terms are confirmed instead. |

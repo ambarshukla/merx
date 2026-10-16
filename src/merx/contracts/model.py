@@ -43,13 +43,36 @@ class YearlyPartitions(_Strict):
     start: int = Field(ge=1990)
 
 
+class MonthlyPartitions(_Strict):
+    """The source answers a date range, so it is fetched a month at a time.
+
+    ``{from}`` and ``{to}`` in the URL become instants covering the month, padded by
+    ``pad_days`` at each end: a settlement day can begin the evening before in UTC, so
+    an unpadded request returns a half-fetched day. The reader then keeps only the days
+    belonging to the partition, so two partitions never claim the same day.
+    """
+
+    by: Literal["month"]
+    start: str = Field(pattern=r"^\d{4}-\d{2}$")
+    pad_days: int = Field(default=1, ge=0, le=5)
+
+
 class Source(_Strict):
-    provider: Literal["eia", "cftc"]
-    format: Literal["eia_hist_xls", "eia_api_v2", "cftc_disaggregated"]
+    provider: Literal["eia", "cftc", "elexon", "neso", "worldbank"]
+    format: Literal[
+        "eia_hist_xls",
+        "eia_api_v2",
+        "cftc_disaggregated",
+        "elexon_mid",
+        "carbon_intensity",
+        "worldbank_pink_sheet",
+    ]
     url: str = Field(pattern=r"^https://")
     # The provider's own identifier for the series, checked against the file on every run.
     series_key: str
-    partitions: YearlyPartitions | None = None
+    partitions: YearlyPartitions | MonthlyPartitions | None = Field(
+        default=None, discriminator="by"
+    )
     # For files with many columns: which source column holds each measure.
     columns: dict[MeasureName, str] | None = None
     # Import dated copies of this file from the Wayback Machine to backfill history from
@@ -60,8 +83,12 @@ class Source(_Strict):
 
     @model_validator(mode="after")
     def _partitions_match_url(self) -> Source:
-        if (self.partitions is not None) != ("{year}" in self.url):
-            raise ValueError("a {year} placeholder in the url and partitions go together")
+        yearly = isinstance(self.partitions, YearlyPartitions)
+        monthly = isinstance(self.partitions, MonthlyPartitions)
+        if yearly != ("{year}" in self.url):
+            raise ValueError("a {year} placeholder in the url and yearly partitions go together")
+        if monthly != ("{from}" in self.url and "{to}" in self.url):
+            raise ValueError("monthly partitions need {from} and {to} placeholders in the url")
         if self.archive_backfill and self.partitions is not None:
             raise ValueError("archive_backfill is for single-file sources, not partitioned ones")
         if (self.format == "eia_api_v2") != (self.api_key_env is not None):

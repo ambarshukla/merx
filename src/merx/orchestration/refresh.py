@@ -3,8 +3,10 @@
 A host that does not run Dagster's always-on scheduler (the daemon) can call this once a
 day, after every source's release time, from a system timer. Each due job runs through
 Dagster with the instance in ``DAGSTER_HOME``, so the runs and their checks appear in
-Dagster's UI exactly as scheduled runs would. Partitioned jobs refresh the partition of
-the latest report (``report_year``). On Sundays the quality lab is rerun too.
+Dagster's UI exactly as scheduled runs would. Partitioned jobs refresh one partition:
+the month in progress for monthly sources, and the latest report's year for yearly ones
+(``report_year``, which is not simply the calendar year around the new year). On Sundays
+the quality lab is rerun too.
 
 Only the day-of-week field of each cron schedule is used: every schedule in the
 contracts names a minute, an hour and days of the week, and the timer runs after the
@@ -18,6 +20,7 @@ from zoneinfo import ZoneInfo
 import dagster as dg
 
 from merx.contracts import Contract
+from merx.contracts.model import MonthlyPartitions
 from merx.orchestration.factory import report_year, schedule_job_name
 from merx.orchestration.lab import BAKEOFF_KEY
 
@@ -50,7 +53,12 @@ def due_jobs(contracts: list[Contract], now: datetime) -> list[DueJob]:
         if cron_weekday not in cron_days(c.schedule.cron.split()[4]):
             continue
         if c.source.partitions is not None:
-            due[f"refresh_{c.id}"] = DueJob(f"refresh_{c.id}", report_year(local))
+            key = (
+                local.strftime("%Y-%m")
+                if isinstance(c.source.partitions, MonthlyPartitions)
+                else report_year(local)
+            )
+            due[f"refresh_{c.id}"] = DueJob(f"refresh_{c.id}", key)
         else:
             name = schedule_job_name(c.schedule.cron, c.schedule.timezone)
             due[name] = DueJob(name, None)

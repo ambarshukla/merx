@@ -1,0 +1,50 @@
+# Great Britain's day-ahead electricity price, per half-hourly settlement period.
+#
+# Elexon publishes Market Index Data: the reference price and traded volume each power
+# exchange reports for every settlement period. This contract takes APX only — averaging
+# two exchanges would be a methodology decision, not a data one.
+#
+# Two things here that no other dataset in merx has. The day is settled in 48 numbered
+# half-hours, and on the two days the clocks change it has 46 or 50 instead (verified
+# against Elexon on 2026-10-16). And power prices can go negative, legitimately: when
+# the wind blows hard overnight it can be cheaper to pay someone to take electricity
+# than to turn generation off.
+id: elexon_gb_power_price
+title: GB day-ahead electricity price (APX), half-hourly
+domain: power
+owner: power-data-steward
+tier: 2
+frequency: half_hourly
+instrument: GB_DAY_AHEAD_POWER
+unit:
+  price: GBP/MWh
+  volume: MWh
+measures: [price, volume]
+source:
+  provider: elexon
+  format: elexon_mid
+  # Fetched a month at a time, padded by a day so no settlement day is half-fetched;
+  # the reader keeps only the days belonging to the partition.
+  url: https://data.elexon.co.uk/bmrs/api/v1/datasets/MID?from={from}&to={to}
+  series_key: APXMIDP
+  partitions: {by: month, start: "2025-01"}
+  columns:
+    price: price
+    volume: volume
+schedule:
+  # Elexon publishes each day's periods through the day; refresh the month each morning.
+  cron: "30 6 * * *"
+  timezone: Europe/London
+checks:
+  - {type: not_null, column: value}
+  - {type: unique, columns: [measure, valid_date, period]}
+  # Negative prices are real here, so the floor is far below zero and only absurd
+  # values fail. The record GB low is about -£100/MWh.
+  - {type: range, column: value, min: -1000, max: 10000, measure: price}
+  - {type: periods_per_day, expected: 48, also_allow: [46, 50]}
+  - {type: no_gaps}
+  - {type: freshness, max_age_days: 3}
+  - {type: no_withdrawals}
+# The detectors judge one value per date; the lab has not scored them on half-hourly
+# series yet, so this dataset stays out of it and has no anomaly check.
+in_quality_lab: false
