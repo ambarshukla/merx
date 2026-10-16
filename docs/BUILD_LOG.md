@@ -530,3 +530,22 @@ which is the claim the whole contract design exists to make.
 What carries the name is `06765T` BRENT LAST DAY on NYMEX — a cash-settled look-alike —
 and four spread contracts. Brent positioning is therefore absent rather than
 approximated, and PROVENANCE says so.
+
+## 2026-10-16: the two-institution comparison, as a control rather than an anecdote
+
+**Built.** `align: monthly_mean` and `min_observations` on `reconcile_with`, so a
+monthly benchmark can be compared with the mean of a daily series. The World Bank's
+monthly WTI is now reconciled against EIA's daily WTI on every run, with a $1 tolerance.
+Decision D-021. 176 tests.
+
+**What it says.** 442 of the comparable months agree within a dollar; 12 differ by more,
+the largest being $3.03 in May 2026. The World Bank rounds to a tenth of a dollar, so
+part of the gap is rounding and the rest is method. That is the difference between this
+and a channel reconciliation, where any gap at all is a fault.
+
+**What it found.** **35 months cannot be compared at all.** They fall between 1994 and
+2015 and have fewer than 15 EIA days left in them — because of the 744 values EIA's
+spreadsheet dropped. A known problem turns out to have a second cost: it quietly
+degrades a control that depends on that data. Without the `min_observations` guard those
+months would have been compared against an 11-day "monthly average" and reported as
+ordinary breaks, which would have been worse than reporting them as not comparable.

@@ -62,12 +62,20 @@ def load_contracts(reference: Reference, directory: Path = CONTRACTS_DIR) -> lis
         raise ContractError(f"no contracts found in {directory}")
     for contract in contracts:
         validate_against_reference(contract, reference)
-    validate_reconciliations(contracts)
+    validate_reconciliations(contracts, reference)
     return contracts
 
 
-def validate_reconciliations(contracts: list[Contract]) -> None:
-    """A reconciliation pairs two datasets of the same instrument, unit and measures."""
+def validate_reconciliations(contracts: list[Contract], reference: Reference) -> None:
+    """Check that a reconciliation pairs two datasets it makes sense to compare.
+
+    What "makes sense" depends on which of the two comparisons it is. Two **channels**
+    of one publisher are the same instrument seen twice, so everything must match and
+    any difference is a fault. Two **institutions** measuring the same quantity are
+    deliberately different instruments — a monthly average is not a daily spot price —
+    so the requirement is weaker: the same commodity, the same unit, the same measures.
+    Comparing copper with wheat remains an error either way.
+    """
     by_id = {c.id: c for c in contracts}
     for contract in contracts:
         if contract.reconcile_with is None:
@@ -80,9 +88,21 @@ def validate_reconciliations(contracts: list[Contract]) -> None:
             )
         if other.id == contract.id:
             raise ContractError(f"{contract.id}: cannot reconcile a dataset with itself")
-        for field in ("instrument", "unit", "measures"):
+
+        fields = ("unit", "measures")
+        if contract.reconcile_with.align == "exact":
+            fields = ("instrument", *fields)
+        for field in fields:
             if getattr(contract, field) != getattr(other, field):
                 raise ContractError(
                     f"{contract.id}: {field} differs from {other.id}, so they cannot be "
                     "reconciled value by value"
+                )
+        if contract.reconcile_with.align != "exact":
+            here = reference.instruments[contract.instrument]
+            there = reference.instruments[other.instrument]
+            if here.commodity != there.commodity:
+                raise ContractError(
+                    f"{contract.id}: {here.commodity} and {there.commodity} are different "
+                    f"commodities, so {other.id} is not a second opinion on the same thing"
                 )

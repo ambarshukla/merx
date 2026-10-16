@@ -24,6 +24,15 @@ source:
   # this ever 404s.
   url: https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/related/CMO-Historical-Data-Monthly.xlsx
   series_key: "Crude oil, WTI"
+# The same benchmark EIA publishes daily. Comparing the two is the point: these are
+# different institutions, not two channels of one, so they are expected to differ a
+# little — the World Bank publishes to a tenth of a dollar and averages its own way.
+# A dollar is generous enough to pass an ordinary month and tight enough that a real
+# divergence shows up.
+reconcile_with:
+  dataset: eia_wti_spot
+  tolerance: 1.0
+  align: monthly_mean
 schedule:
   # The sheet is updated monthly, early in the month. Checked weekly so a late or early
   # release is picked up rather than waited for.

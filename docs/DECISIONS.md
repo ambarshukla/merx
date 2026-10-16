@@ -504,3 +504,42 @@ reader, and the catalogue reached all six sectors. Each contract keeps its own c
 the 586 KB file, about 19 MB a month in total; that duplication is the price of one
 contract per pipeline and is the clearest argument yet for the recorded follow-up of
 deduplicating identical raw downloads by checksum.
+
+## D-021: Reconciling two institutions, not just two channels (2026-10-16)
+
+**Context.** Every reconciliation so far compared two channels of one publisher — EIA's
+spreadsheet against EIA's API — where the right answer is that they agree exactly and
+any difference is a fault. The World Bank and EIA both publish a price for WTI, and
+that is a different question: two institutions, two methods, one quantity. They should
+*not* agree exactly, and a comparison that demanded they did would be wrong about what
+it was measuring. They are also on different clocks: monthly against daily.
+
+**Decision.** `reconcile_with` gains `align` and `min_observations`. With
+`align: monthly_mean` the other dataset's values are averaged within each calendar
+month before comparison, and months with fewer than `min_observations` underlying values
+are left out entirely rather than compared against a handful of days. The tolerance
+carries the meaning: zero for two channels, a stated amount for two institutions, where
+it records how far apart is unremarkable.
+
+The contract validation was loosened in exactly one direction. Two channels must still
+share an instrument, unit and measures. Two institutions need not share an instrument —
+a monthly average genuinely is not a daily spot price, and the reference data says so —
+but must share the **commodity**, so comparing copper with wheat is still an error.
+
+**Alternatives considered.** A derived "monthly WTI" dataset built from the daily one
+(more faithful to the pipeline model, at the cost of a dataset that exists only to be
+compared); comparing against month-end rather than the mean (simpler, but it is not what
+either institution publishes); allowing any two datasets to be reconciled (removes the
+guard that catches a typo pointing at the wrong dataset).
+
+**Consequences.** Over the 489 months both cover, 442 agree within a dollar and 12
+differ by more — the largest $3.03 in May 2026. The World Bank publishes to a tenth of
+a dollar, so some of the gap is rounding and the rest is method; neither is a fault, and
+the tolerance is where that judgement is written down.
+
+The comparison also surfaced a second consequence of a problem already known. **35
+months cannot be compared at all**, because EIA's spreadsheet lost so many days from
+them that fewer than 15 remain — the same 744 withdrawn values that blocked WTI at the
+publish gate. Without `min_observations` those months would have been compared against
+an 11-day average and counted as ordinary breaks, which would have been a worse answer
+than admitting the comparison is not available.
