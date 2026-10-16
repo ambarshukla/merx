@@ -307,11 +307,15 @@ def published_series(
     store: Store, contract: Contract, measure: str, start: date | None, end: date | None
 ) -> list[list]:
     # Below a day there are many values per date, so the x axis is the period's start
-    # time; at a day or coarser it stays a plain date.
+    # time and the ordering needs the period. At a day or coarser there is one value
+    # per date, so neither column is mentioned — which also means this reads a table
+    # published before those columns existed. A blocked dataset keeps its last good
+    # publication indefinitely, so such tables are not a transient state.
     x = "strftime(valid_time_utc, '%Y-%m-%dT%H:%M')" if contract.sub_daily else "valid_date"
+    order = "valid_date, period" if contract.sub_daily else "valid_date"
     rows = store.query(
         f'SELECT {x}, value FROM published."{contract.id}" '
-        "WHERE measure = ? AND valid_date BETWEEN ? AND ? ORDER BY valid_date, period",
+        f"WHERE measure = ? AND valid_date BETWEEN ? AND ? ORDER BY {order}",
         [measure, start or date(1900, 1, 1), end or date(2999, 12, 31)],
     )
     # Sub-daily x values arrive from the query as text already; dates do not.
@@ -324,10 +328,11 @@ def series_as_known_at(store: Store, contract: Contract, measure: str, at: datet
     # The history keeps every period, so a sub-daily series is ordered by both and
     # dated by its period's start, exactly as the published series is.
     x = "strftime(valid_time_utc, '%Y-%m-%dT%H:%M')" if contract.sub_daily else "valid_date"
+    order = "valid_date, period" if contract.sub_daily else "valid_date"
     rows = store.query(
         f'SELECT {x}, value FROM pit."{contract.id}" '
         "WHERE measure = ? AND known_from_utc <= ? "
-        "AND (known_to_utc IS NULL OR known_to_utc > ?) ORDER BY valid_date, period",
+        f"AND (known_to_utc IS NULL OR known_to_utc > ?) ORDER BY {order}",
         [measure, at, at],
     )
     return [[d if isinstance(d, str) else d.isoformat(), v] for d, v in rows]
