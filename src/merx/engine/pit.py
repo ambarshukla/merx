@@ -34,6 +34,10 @@ class _Open:
     known_from: datetime
     raw_path: str
     origin: str
+    # The start of the period this value belongs to, for sub-daily data. A property of
+    # the (date, period) key rather than of the version, but carried here because the
+    # key is what the replay walks.
+    valid_time: datetime | None = None
 
 
 def pit_table(contract: Contract) -> str:
@@ -41,8 +45,8 @@ def pit_table(contract: Contract) -> str:
 
 
 def replay(contract: Contract, zone: RawZone) -> list[tuple]:
-    """Rows of (measure, valid_date, period, value, known_from, known_to, ended_by,
-    raw_path, origin), from every raw file of the dataset in knowledge-time order."""
+    """Rows of (measure, valid_date, period, valid_time, value, known_from, known_to,
+    ended_by, raw_path, origin), from every raw file in knowledge-time order."""
     rows: list[tuple] = []
     current: dict[tuple[str | None, str, date, int], _Open] = {}
     for landed in zone.history(contract.id):
@@ -57,7 +61,7 @@ def replay(contract: Contract, zone: RawZone) -> list[tuple]:
                 continue
             if old is not None:
                 rows.append(_row(key, old, at, "revised"))
-            current[key] = _Open(obs.value, at, landed.path, landed.origin)
+            current[key] = _Open(obs.value, at, landed.path, landed.origin, obs.valid_time_utc)
         for key in [k for k in current if k[0] == landed.partition and k not in seen]:
             rows.append(_row(key, current.pop(key), at, "withdrawn"))
     rows.extend(_row(key, version, None, None) for key, version in current.items())
@@ -70,6 +74,7 @@ def _row(key, version: _Open, known_to: datetime | None, ended_by: str | None) -
         measure,
         valid_date,
         period,
+        version.valid_time,
         version.value,
         version.known_from,
         known_to,
@@ -88,6 +93,7 @@ def build(con: duckdb.DuckDBPyConnection, contract: Contract, zone: RawZone) -> 
         ("measure", pa.string()),
         ("valid_date", pa.date32()),
         ("period", pa.int32()),
+        ("valid_time_utc", pa.timestamp("us")),
         ("value", pa.float64()),
         ("known_from_utc", pa.timestamp("us")),
         ("known_to_utc", pa.timestamp("us")),
