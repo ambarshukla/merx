@@ -13,9 +13,13 @@ source:
   format: eia_hist_xls
   url: https://www.eia.gov/dnav/ng/hist_xls/RNGWHHDd.xls
   series_key: RNGWHHD
+  # Backfill history from dated copies in the Wayback Machine (probed 2026-10-16).
+  archive_backfill: true
 schedule:
   cron: "30 18 * * 1-5"
   timezone: America/New_York
+# Compare every value with the same series from EIA's API (D-012).
+reconcile_with: {dataset: eia_api_henry_hub_spot}
 checks:
   # The source itself has no value for 2018-01-05 (observed 2026-10-15). The gap is
   # accepted here by name, so any new gap still fails.

@@ -1,0 +1,31 @@
+# Henry Hub natural gas spot price, through EIA's API (v2): the same series as
+# eia_henry_hub_spot, through a second channel. Added 2026-10-16 after a count showed
+# the API holding 7,484 daily values since 1997-01-07 against the spreadsheet's 5,709.
+id: eia_api_henry_hub_spot
+title: Henry Hub natural gas spot price, daily (EIA API)
+domain: gas
+owner: gas-data-steward
+tier: 2
+frequency: daily
+instrument: HENRY_HUB_SPOT
+unit: USD/MMBtu
+measures: [price]
+source:
+  provider: eia
+  format: eia_api_v2
+  url: https://api.eia.gov/v2/natural-gas/pri/fut/data/
+  series_key: RNGWHHD
+  # The key is read from this environment variable (set in .env); it is never stored.
+  api_key_env: EIA_API_KEY
+schedule:
+  cron: "30 18 * * 1-5"
+  timezone: America/New_York
+in_quality_lab: false
+checks:
+  # Both channels have no value for 2018-01-05 (observed 2026-10-16), as in the
+  # spreadsheet; accepted by name so any new gap still fails.
+  - {type: not_null, column: value, allow: [2018-01-05]}
+  - {type: unique, columns: [measure, valid_date]}
+  - {type: range, column: value, min: -10, max: 100}
+  - {type: freshness, max_age_days: 10}
+  - {type: no_withdrawals}

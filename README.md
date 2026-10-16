@@ -4,7 +4,7 @@
 as a small, honest version of how commodity datasets are manufactured and kept
 trustworthy.
 
-> **Status: early.** Nine real datasets from two public sources run end to end through
+> **Status: early.** Eleven real datasets from two public sources run end to end through
 > the engine (contract → raw download → staged table → checks → publish gate,
 > orchestrated by Dagster), failing checks become tracked exceptions, every value keeps
 > its full revision history, the data-quality lab scores anomaly detectors on the data,
@@ -38,6 +38,8 @@ of the whole history.
 | US Lower 48 natural gas in storage | EIA | weekly | 1 |
 | WTI crude oil futures, contract 1 | EIA | daily (series ended 2024-04-05) | 3 |
 | WTI crude oil spot, second channel (EIA API) | EIA API | daily | 2 |
+| Brent crude oil spot, second channel (EIA API) | EIA API | daily | 2 |
+| Henry Hub natural gas spot, second channel (EIA API) | EIA API | daily | 2 |
 | WTI futures positions by trader group (14 measures) | CFTC | weekly, yearly files from 2010 | 2 |
 | Henry Hub futures positions by trader group (14 measures) | CFTC | weekly, yearly files from 2010 | 2 |
 
@@ -64,13 +66,14 @@ published/eia_wti_spot  the gate: tier 1 publishes only if no error-level check 
                         tiers 2 and 3 publish marked "warn". Every attempt is logged.
 ```
 
-As of 2026-10-16, seven datasets publish. The futures series (tier 3) is marked `warn`
-because its newest value is from April 2024 (root cause `source_discontinued`). **WTI
-spot is blocked** by `no_withdrawals`: 744 daily prices that the history knows are
-missing from the source's current file (root cause `source_data_error`), and nobody has
-accepted that loss. Reconciling the spreadsheet against EIA's API (D-012) shows the two
-channels agree exactly on every shared date; the API has those 744 values plus 13
-holiday fills, and lacks 8 dates the spreadsheet has.
+As of 2026-10-16, eight datasets publish. The futures series (tier 3) is marked `warn`
+because its newest value is from April 2024 (root cause `source_discontinued`). **WTI,
+Brent and Henry Hub spot are blocked** by `no_withdrawals`: EIA's spreadsheets for all
+three dropped large parts of their older history between May and October 2026 (744,
+890 and 1,768 daily prices), while EIA's API still serves them. Reconciling each
+spreadsheet against the API (D-012) shows the channels agree on all but 3 of more than
+24,000 shared values; the disagreement is about which dates exist. Nobody has accepted
+the losses (root cause `source_data_error`).
 
 Every staged table has the same long shape: one row per `(measure, valid_date)`, with
 the value, its unit, our instrument identifier, and the raw file and fetch time it came
@@ -79,16 +82,17 @@ from. A single-series dataset has one measure (`price`, `stocks`, `working_gas`)
 ## Point-in-time history
 
 Sources overwrite their files in place. `pit."<id>"` keeps every version of every value
-with when it became known, rebuilt by replaying every raw download; for three datasets
+with when it became known, rebuilt by replaying every raw download; for five datasets
 the history is backfilled from dated copies in the Internet Archive's Wayback Machine
 (back to 2010). Any dataset can be rebuilt *as known at* any moment. What it found:
 
 - US crude stocks: in 2016 the entire weekly history back to 1982 was revised down by
   15.7 to 34.1 million barrels.
 - US gas storage: seven weekly values revised (2017, 2021, 2024).
-- WTI spot: between September and October 2026, **744 daily prices from 1986 to 2019
-  disappeared from EIA's spreadsheet** while EIA's API still serves them. No check on
-  the rows present could see this; the history did.
+- WTI, Brent and Henry Hub spot: between May and October 2026, **3,402 daily prices
+  (744, 890 and 1,768) disappeared from EIA's spreadsheets** while EIA's API still
+  serves them. No check on the rows present could see this; the history did.
+- Henry Hub: in 2013, 57 prices were rounded from three decimals to two.
 
 Details: [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md), decision D-010.
 
