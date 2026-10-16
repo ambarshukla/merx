@@ -29,7 +29,9 @@ Frequency = Literal["half_hourly", "hourly", "daily", "weekly", "monthly", "annu
 SUB_DAILY: frozenset[str] = frozenset({"half_hourly", "hourly"})
 
 # File formats that hold exactly one series, so their contract names exactly one measure.
-SINGLE_SERIES_FORMATS = {"eia_hist_xls", "eia_api_v2"}
+# A Pink Sheet contract reads one column of a many-column file, named by series_key,
+# so like the single-series formats it needs no columns mapping.
+SINGLE_SERIES_FORMATS = {"eia_hist_xls", "eia_api_v2", "worldbank_pink_sheet"}
 
 
 class _Strict(BaseModel):

@@ -451,3 +451,35 @@ rather than fragments whose meaning depends on how they were split.
 - The carbon API publishes forecasts about two days ahead, so the dataset legitimately
   contains **96 rows dated in the future**, whose outturn is still empty. Freshness is
   governed by the stalest measure, which is the outturn, so a stalled feed still shows.
+
+## 2026-10-16: metals, agriculture and a second opinion on oil
+
+**Built.** Eight datasets from the World Bank's Pink Sheet — copper, aluminium, gold,
+wheat, maize, soybeans, and monthly WTI and Brent — each a contract of about thirty
+lines reading one column of the same monthly spreadsheet. The reader is one file; the
+eight datasets are configuration. With these, merx covers all six sectors: oil, gas,
+power, carbon, metals and agriculture. 164 tests.
+
+**Units are checked, not assumed.** The Pink Sheet states each column's unit on its own
+header row, and the reader compares it with the contract. A benchmark quietly repriced
+from $/mt to $/kg would otherwise multiply a series by a thousand and sail through any
+range check wide enough to allow it.
+
+**Two institutions, one benchmark.** The World Bank publishes a monthly WTI price; EIA
+publishes WTI daily. Over the **489 months** both cover, the World Bank's figure differs
+from the mean of EIA's daily prices by **17 cents on average**, and by as much as
+**$3.03** (May 2026). Only 34 of those months agree to within a cent. Part of that is
+rounding — the World Bank publishes to a tenth of a dollar — and the rest is method.
+Neither is wrong. It is the difference between two institutions computing "the monthly
+average price of WTI", and it is the kind of difference a tolerance exists for, unlike
+the two-channel reconciliations already here, where the answer should be exact.
+
+**Found in the file.** The published workbook's *first* sheet is called "Mismatch
+Details" — the World Bank's own internal comparison of the release against the previous
+one, listing cells that went from a number to blank (2020 barley and sorghum). The
+publisher ships its own reconciliation report inside the data file.
+
+**Volume.** Each contract keeps its own copy of the 586 KB download, about 19 MB a month
+across the eight. That is deliberate — one contract, one pipeline, no shared state — and
+it is the clearest argument yet for deduplicating identical raw downloads by checksum,
+which is still the recorded follow-up.

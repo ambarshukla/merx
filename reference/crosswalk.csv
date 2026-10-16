@@ -9,3 +9,11 @@ eia,NW2_EPG0_SWO_R48_BCF,US_L48_GAS_STORAGE,Weekly Lower 48 States Natural Gas W
 cftc,023651,HENRY_HUB_NYMEX_FUTURES,NAT GAS NYME - NEW YORK MERCANTILE EXCHANGE,Join on the contract market code
 elexon,APXMIDP,GB_DAY_AHEAD_POWER,Market Index Data (APX),"Elexon publishes more than one exchange's index; this contract takes APX only"
 neso,gb_national,GB_GRID_CARBON_INTENSITY,National grid carbon intensity,"Forecast and outturn for the same half hour"
+worldbank,"Copper",COPPER_GLOBAL_MONTHLY,"Copper","Pink Sheet column name; the file spells some commodities its own way"
+worldbank,"Aluminum",ALUMINIUM_GLOBAL_MONTHLY,"Aluminum","Pink Sheet column name; the file spells some commodities its own way"
+worldbank,"Gold",GOLD_GLOBAL_MONTHLY,"Gold","Pink Sheet column name; the file spells some commodities its own way"
+worldbank,"Wheat, US HRW",WHEAT_HRW_MONTHLY,"Wheat, US HRW","Pink Sheet column name; the file spells some commodities its own way"
+worldbank,"Maize",MAIZE_MONTHLY,"Maize","Pink Sheet column name; the file spells some commodities its own way"
+worldbank,"Soybeans",SOYBEANS_MONTHLY,"Soybeans","Pink Sheet column name; the file spells some commodities its own way"
+worldbank,"Crude oil, WTI",WTI_MONTHLY_AVG,"Crude oil, WTI","Pink Sheet column name; the file spells some commodities its own way"
+worldbank,"Crude oil, Brent",BRENT_MONTHLY_AVG,"Crude oil, Brent","Pink Sheet column name; the file spells some commodities its own way"

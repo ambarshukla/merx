@@ -67,8 +67,10 @@ def _read_carbon_intensity(content: bytes, contract: Contract, partition: str | 
 
 
 def _read_worldbank_pink_sheet(content: bytes, contract: Contract) -> ReadResult:
-    assert contract.source.columns is not None  # guaranteed by the contract schema
-    parsed = worldbank.parse(content, contract.source.columns)
+    # One contract reads one column of the sheet: the measure it declares, from the
+    # column its series_key names.
+    (measure,) = contract.measures
+    parsed = worldbank.parse(content, {measure: contract.source.series_key})
     # The file states its own units, so a repricing at the source fails here rather
     # than silently rescaling a series by a thousand.
     disagree = {
