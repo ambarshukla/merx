@@ -11,9 +11,9 @@ import pytest
 from conftest import eia_workbook
 
 from merx.config import CONTRACTS_DIR
-from merx.contracts import load_contract
+from merx.contracts import load_contract, load_contracts
 from merx.orchestration.definitions import build_definitions
-from merx.orchestration.factory import build_assets, build_checks
+from merx.orchestration.factory import build_assets, build_checks, schedule_job_name
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import load_reference
 from merx.sources.http import FetchResult
@@ -133,11 +133,15 @@ def test_wrong_file_fails_at_parse_and_stages_nothing(tmp_path):
         query(tmp_path, 'SELECT * FROM staged."eia_wti_spot"')
 
 
-def test_repository_definitions_load(tmp_path):
+def test_repository_definitions_cover_every_contract(tmp_path):
     defs = build_definitions(data_dir=tmp_path)
+    contracts = load_contracts(load_reference())
     keys = {k.to_user_string() for k in defs.resolve_all_asset_keys()}
-    assert {"raw/eia_wti_spot", "staged/eia_wti_spot", "staged/eia_us_crude_stocks"} <= keys
-    assert {s.name for s in defs.schedules} == {
-        "refresh_0_12_x_x_3_new_york_schedule",
-        "refresh_30_18_x_x_1to5_new_york_schedule",
+    for c in contracts:
+        assert {f"raw/{c.id}", f"staged/{c.id}"} <= keys
+    # One schedule per distinct (cron, timezone), each refreshing all its contracts.
+    expected = {
+        schedule_job_name(c.schedule.cron, c.schedule.timezone) + "_schedule" for c in contracts
     }
+    assert {s.name for s in defs.schedules} == expected
+    assert "refresh_30_18_x_x_1to5_new_york_schedule" in expected

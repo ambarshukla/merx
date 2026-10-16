@@ -56,3 +56,20 @@ Five downloads, 1.8 MB in total.
 - **Real spikes exist.** Henry Hub printed 30.72 on 2026-01-23, the series high. It is
   inside the range check. It will be a test case for the spike detectors: a real event
   that a naive detector would flag as a defect.
+
+## 2026-10-15: first onboarding by configuration alone (US gas storage)
+
+Added `eia_us_gas_storage` (Lower 48 working gas in storage, weekly) as **one contract
+file (25 lines) and three reference rows (instrument, unit, crosswalk), with no code
+changes**. It was the first dataset added after the engine existed, so it is the first
+real test of D-001. The source's layout had been probed beforehand and matched the
+existing EIA parser exactly.
+
+Live run: 876 weekly values from 2010-01-01 to 2026-10-09, between 824 and 4,047 Bcf,
+all four checks pass. Prediction (written first): same layout, about 876 rows, all
+pass. Matched.
+
+How we will report time to onboard: as *what had to change* (files, lines, code or
+none). Wall-clock times would mostly measure who did the typing. A schedule test that
+listed exact schedule names had to change too; it now derives them from the
+contracts, so the next dataset will not touch it.
