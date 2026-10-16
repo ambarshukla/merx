@@ -12,11 +12,14 @@ dependencies = [
     "pydantic>=2.14",
     "pyyaml>=6",
     "xlrd>=2.0",
+    "fastapi>=0.143",
+    "uvicorn>=0.54",
 ]
 
 [project.optional-dependencies]
 dev = [
     "dagster-webserver>=1.13,<1.14",
+    "httpx>=0.28",
     "pytest>=8",
     "ruff>=0.14",
     "xlwt>=1.3",

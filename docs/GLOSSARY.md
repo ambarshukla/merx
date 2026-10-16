@@ -21,6 +21,7 @@ uses them.
 | **CFTC (Commodity Futures Trading Commission)** | The US regulator of futures markets. Publishes weekly reports of who holds futures positions. |
 | **COT (Commitments of Traders)** | The CFTC's weekly report of futures positions by type of trader, as of Tuesday and published the following Friday. |
 | **Channel** | One way a source delivers the same data, such as a spreadsheet download or an API. Two channels can disagree. |
+| **Client view** | The view for people using the data (`/client`): published series only, with quality status, history and revisions. |
 | **Contango** | A forward curve where later delivery costs more than nearer delivery, usually a sign of ample supply and storage. |
 | **Contract 1 (front month)** | The futures contract nearest to expiry. "Contract 1" is a series that rolls to the next contract as each one expires. |
 | **Crosswalk** | A table that maps each provider's identifier for something onto our own identifier, so data is joined on codes, not on names that can change. |
@@ -46,11 +47,13 @@ uses them.
 | **Non-reportable positions** | Positions of traders too small to be reported individually; the CFTC derives them as the remainder of open interest. |
 | **NYMEX (New York Mercantile Exchange)** | The exchange where WTI crude oil and Henry Hub natural gas futures trade. |
 | **Open interest** | The number of futures contracts open at a point in time. Each has a long and a short side. |
+| **Ops console** | The operations view (`/ops`): dataset status, checks, exceptions, missing values, reconciliation and detector scores. |
 | **Partition** | One slice of a dataset that is fetched and tracked on its own, such as one year of a source published as yearly files. |
 | **PRA (price reporting agency)** | An organisation that assesses physical commodity prices from market evidence, for example Platts or Argus. |
 | **Precision** | Of the values a detector flags, the share that are truly wrong. Low precision means wasted reviewer time. |
 | **Producer/merchant** | In the COT report, companies that produce, process or use the physical commodity and use futures to hedge. |
 | **Publish gate** | The rule that decides whether a staged build reaches users: every check must have run on it, and for tier 1 no error-level check may fail. |
+| **Published layer** | The tables (`published.<id>`) that passed the publish gate: the only data the client view reads. |
 | **Quarantine (detector)** | A flagged value is not used as the reference or in the yardstick for judging later values, so one bad value cannot distort the next judgements. |
 | **Raw zone (landing zone)** | Where downloads are stored exactly as received, never edited. Everything downstream is rebuilt from it. |
 | **Recall** | Of the values that are truly wrong, the share a detector flags. Low recall means errors reach users. |
