@@ -181,3 +181,34 @@ formats for one dataset, and the history load is invisible to the orchestrator).
 be re-fetched alone. The current year's partition list is computed when definitions
 load, so a new year appears after a reload. A balance check catches a whole class of
 corruption (a dropped or shifted column) that range checks cannot.
+
+## D-009: Checks run with staging; the publish gate is code; exceptions are data (2026-10-15)
+
+**Context.** Data should reach users only when its checks allow it, and every failure
+should become a tracked piece of work with an owner, not a red light someone may or may
+not notice. The first design ran each check as its own Dagster step. A tier 3 publish
+step then ran before its checks had finished, and Dagster's own blocking skipped a tier
+1 publish step entirely, so the blocked attempt left no record.
+
+**Decision.** The contract's checks run inside the staging step, straight after the
+table is rebuilt (Dagster `check_specs`), so they have always finished before anything
+downstream starts; Dagster still records and shows each result with its severity. Each
+staged table carries a build id (a fingerprint of the raw files it was built from), and
+every result is logged in `ops.check_results` against that build. A `published/<id>`
+asset applies the gate in code: every check must have a result for this exact build;
+tier 1 is blocked by any failed error-severity check; tiers 2 and 3 publish marked
+`warn`. Every attempt is logged in `meta.publications`. A failing check opens an
+exception in `ops.exceptions` (owner from the contract), later failures update it, and a
+pass closes it. A person assigns a root-cause class.
+
+**Alternatives considered.** Separate check steps with Dagster blocking only (no record
+of blocked attempts, and non-blocking checks race the publish step); publishing
+everything with a status column and letting readers filter (pushes the gate onto every
+consumer).
+
+**Consequences.** One rule, readable in `merx/engine/publish.py`, decides what users
+see, and it cannot publish a build nobody checked. Re-running one check alone means
+re-running staging, which is cheap here. Exceptions give the operating numbers: open
+count, time to recover, and repeat share. Root-cause classes are validated in code so
+the list can grow; the first live exception needed a class that was missing
+(`source_discontinued`).

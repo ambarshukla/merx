@@ -12,14 +12,15 @@ new file format.
 
 import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import dagster as dg
 
 from merx.contracts import Contract, check_name
-from merx.contracts.model import Check
-from merx.engine import formats
+from merx.engine import formats, ops
 from merx.engine.checks import run_check
+from merx.engine.publish import publish, published_table
 from merx.engine.stage import stage, staged_table
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import Reference
@@ -35,6 +36,10 @@ def raw_key(contract: Contract) -> dg.AssetKey:
 
 def staged_key(contract: Contract) -> dg.AssetKey:
     return dg.AssetKey(["staged", contract.id])
+
+
+def published_key(contract: Contract) -> dg.AssetKey:
+    return dg.AssetKey(["published", contract.id])
 
 
 def _tags(contract: Contract) -> dict[str, str]:
@@ -104,6 +109,16 @@ def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefi
         tags=_tags(contract),
         kinds={"duckdb"},
         metadata={"table": staged_table(contract), "unit": contract.unit},
+        # The contract's checks run in this same step, straight after staging (D-009), so
+        # they have always finished before the publish gate looks at them.
+        check_specs=[
+            dg.AssetCheckSpec(
+                name=check_name(check),
+                asset=staged_key(contract),
+                description=check.model_dump_json(),
+            )
+            for check in contract.checks
+        ],
     )
     def staged_asset(store: DataStore) -> dg.MaterializeResult:
         zone = RawZone(store.path)
@@ -112,6 +127,7 @@ def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefi
         )
         parts = [(landed, formats.read(zone.read(landed), contract)) for landed in files]
         result = stage(contract, instrument.instrument_id, parts, store.path)
+        check_results = run_contract_checks(contract, store.path, result.build_id)
         metadata = {
             "dagster/row_count": result.rows,
             "null_values": result.null_values,
@@ -132,40 +148,75 @@ def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefi
             metadata["source_release_date"] = last_read.release_date.isoformat()
         if last_read.next_release_date is not None:
             metadata["source_next_release_date"] = last_read.next_release_date.isoformat()
-        return dg.MaterializeResult(metadata=metadata)
+        metadata["build_id"] = result.build_id
+        return dg.MaterializeResult(metadata=metadata, check_results=check_results)
 
-    return [raw_asset, staged_asset]
-
-
-def build_checks(contract: Contract) -> list[dg.AssetChecksDefinition]:
-    return [_build_check(contract, check) for check in contract.checks]
-
-
-def _build_check(contract: Contract, check: Check) -> dg.AssetChecksDefinition:
-    # In a tier 1 dataset a failed error-severity check blocks anything downstream in the
-    # same run: the seed of the publish gate.
-    blocking = contract.tier == 1 and check.severity == "error"
-
-    @dg.asset_check(
-        asset=staged_key(contract),
-        name=check_name(check),
-        blocking=blocking,
-        description=check.model_dump_json(),
+    @dg.asset(
+        key=published_key(contract),
+        deps=[staged_key(contract)],
+        group_name=contract.domain,
+        description=(
+            f"{contract.title}: the staged build, published only if the gate allows it "
+            f"(tier {contract.tier})."
+        ),
+        owners=[f"team:{contract.owner}"],
+        tags=_tags(contract),
+        kinds={"duckdb"},
+        metadata={"table": published_table(contract)},
     )
-    def _check(store: DataStore) -> dg.AssetCheckResult:
+    def published_asset(store: DataStore) -> dg.MaterializeResult:
         con = connect(store.path)
         try:
-            outcome = run_check(con, staged_table(contract), check, datetime.now(UTC).date())
+            decision = publish(con, contract)
         finally:
             con.close()
-        return dg.AssetCheckResult(
-            passed=outcome.passed,
-            severity=_SEVERITY[check.severity],
-            description=outcome.description,
-            metadata=outcome.metadata,
+        if not decision.publish:
+            raise dg.Failure(
+                description=f"{contract.id} not published: {decision.status}",
+                metadata={"failed_checks": decision.failed, "missing_checks": decision.missing},
+            )
+        return dg.MaterializeResult(
+            metadata={"quality_status": decision.status, "failed_checks": decision.failed}
         )
 
-    return _check
+    return [raw_asset, staged_asset, published_asset]
+
+
+def run_contract_checks(
+    contract: Contract, data_dir: Path, build_id: str
+) -> list[dg.AssetCheckResult]:
+    """Run every check in the contract on the staged build, logging each result and
+    opening or closing exceptions, and return them for Dagster to record and display."""
+    out = []
+    con = connect(data_dir)
+    try:
+        for check in contract.checks:
+            outcome = run_check(con, staged_table(contract), check, datetime.now(UTC).date())
+            change = ops.record(
+                con,
+                dataset_id=contract.id,
+                owner=contract.owner,
+                build_id=build_id,
+                check_name=check_name(check),
+                severity=check.severity,
+                outcome=outcome,
+            )
+            metadata = dict(outcome.metadata)
+            if change.exception_id is not None:
+                metadata["exception"] = f"{change.exception_id} ({change.action})"
+            out.append(
+                dg.AssetCheckResult(
+                    asset_key=staged_key(contract),
+                    check_name=check_name(check),
+                    passed=outcome.passed,
+                    severity=_SEVERITY[check.severity],
+                    description=outcome.description,
+                    metadata=metadata,
+                )
+            )
+    finally:
+        con.close()
+    return out
 
 
 def schedule_job_name(cron: str, timezone: str) -> str:
@@ -186,8 +237,10 @@ def report_year(when: datetime) -> str:
 def _partitioned_schedule(contract: Contract) -> tuple[dg.UnresolvedAssetJobDefinition, Any]:
     job = dg.define_asset_job(
         name=f"refresh_{contract.id}",
-        selection=dg.AssetSelection.assets(raw_key(contract), staged_key(contract)),
-        description=f"Refresh: {contract.id} (the current year's file, then the staged table)",
+        selection=dg.AssetSelection.assets(
+            raw_key(contract), staged_key(contract), published_key(contract)
+        ),
+        description=f"Refresh: {contract.id} (the current year's file, staged, published)",
     )
 
     @dg.schedule(
@@ -223,7 +276,7 @@ def build_schedules(
         groups.setdefault((contract.schedule.cron, contract.schedule.timezone), []).append(contract)
 
     for (cron, timezone), members in sorted(groups.items()):
-        keys = [k for c in members for k in (raw_key(c), staged_key(c))]
+        keys = [k for c in members for k in (raw_key(c), staged_key(c), published_key(c))]
         job = dg.define_asset_job(
             name=schedule_job_name(cron, timezone),
             selection=dg.AssetSelection.assets(*keys),

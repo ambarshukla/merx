@@ -136,3 +136,21 @@ identities hold, freshness passes. All matched.
 **Found while testing.** A damaged zip (bad checksum) escaped as Python's own
 `BadZipFile` rather than a format error. The parser now reads the whole file up front
 and reports damage as a `SourceFormatError`.
+
+## 2026-10-15: the publish gate and exceptions as data
+
+**Built.** Staged builds with ids (`meta.stage_builds`), checks run inside the staging
+step, a check-result log (`ops.check_results`), exceptions with owners, occurrences,
+open and close times and root-cause classes (`ops.exceptions`), the gate
+(`merx/engine/publish.py`), a `published/<id>` asset per contract, and a publication log
+(`meta.publications`). Decision D-009. 96 tests.
+
+**Found while testing.** With checks as separate Dagster steps, a tier 3 publish ran
+before its checks finished and was refused as "unchecked", and Dagster's blocking
+skipped a tier 1 publish without leaving a record. Running the checks in the staging
+step fixed both (D-009).
+
+**Live run (all eight datasets).** Prediction: eight publications, seven `pass` and one
+`warn` (futures freshness), one open exception. Result: exactly that. The exception
+needed a root-cause class the list did not have, so `source_discontinued` was added and
+assigned, with a note that the series ends 2024-04-05.

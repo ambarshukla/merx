@@ -20,7 +20,7 @@ from merx.config import CONTRACTS_DIR
 from merx.contracts import load_contract
 from merx.contracts.model import BalanceCheck
 from merx.engine.checks import run_check
-from merx.orchestration.factory import build_assets, build_checks, report_year
+from merx.orchestration.factory import build_assets, report_year
 from merx.orchestration.resources import DataStore
 from merx.reference import load_reference
 from merx.sources import SourceFormatError
@@ -257,7 +257,7 @@ def run_partitions(tmp_path: Path, files: dict[str, bytes]) -> list[dg.ExecuteIn
         path = tmp_path / f"{year}.zip"
         path.write_bytes(content)
         urls[CONTRACT.source.url.replace("{year}", year)] = str(path)
-    assets = [*build_assets(CONTRACT, load_reference()), *build_checks(CONTRACT)]
+    assets = [*build_assets(CONTRACT, load_reference())]
     resources = {
         "store": DataStore(data_dir=str(tmp_path / "data")),
         "fetcher": FileFetcher(files=urls),
