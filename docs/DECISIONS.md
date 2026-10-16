@@ -240,3 +240,26 @@ every download matters (D-005). Archive knowledge times are upper bounds: a capt
 the archive saw the file then, not that it was first published then, and the archive
 only has the copies it happened to take. The replay re-reads every raw file each run,
 which is fine at current sizes and is the first thing to make incremental if they grow.
+
+## D-011: Values may not silently disappear; accepting a loss is a recorded decision (2026-10-16)
+
+**Context.** EIA's WTI spreadsheet lost 744 daily prices in September or October 2026,
+and every check passed: not-null, uniqueness, range and freshness all judge only the
+rows that are present. The point-in-time history (D-010) saw the loss.
+
+**Decision.** A `no_withdrawals` check, in every contract, compares the build with the
+history: every (measure, valid date) ever known must still be present, unless a person
+has accepted its removal with a reason. Acceptances are rows in
+`ops.accepted_withdrawals`, made with `merx accept-withdrawals`, not lines in the
+contract, because one source change can remove hundreds of values at once and each
+acceptance needs a time and a reason. A value that comes back simply stops being
+missing. A first build, with no history yet, passes.
+
+**Alternatives considered.** A row-count check against the previous build (catches a
+drop in count but not a swap of one date for another, and says nothing about which
+values went); listing accepted dates in the contract (744 dates in a YAML file, with no
+record of who decided or when).
+
+**Consequences.** WTI spot is blocked at the gate until someone decides what to do about
+the 744 values; the previous publication stays in place. The check is only as good as
+the history: it cannot see values removed before the earliest raw file.

@@ -99,6 +99,15 @@ class FreshnessCheck(_Strict):
     severity: Severity = "error"
 
 
+class NoWithdrawalsCheck(_Strict):
+    """Every value ever known must still be in the build, unless a person has accepted
+    its removal (``ops.accepted_withdrawals``). Checks on the rows present cannot see
+    rows that vanished; this one compares against the point-in-time history."""
+
+    type: Literal["no_withdrawals"]
+    severity: Severity = "error"
+
+
 class BalanceCheck(_Strict):
     """On every date, one measure must equal the sum of others (an accounting identity,
     e.g. open interest equals all long positions plus spreads)."""
@@ -112,7 +121,7 @@ class BalanceCheck(_Strict):
 
 
 Check = Annotated[
-    NotNullCheck | UniqueCheck | RangeCheck | FreshnessCheck | BalanceCheck,
+    NotNullCheck | UniqueCheck | RangeCheck | FreshnessCheck | BalanceCheck | NoWithdrawalsCheck,
     Field(discriminator="type"),
 ]
 
@@ -176,4 +185,6 @@ def check_name(check: Check) -> str:
             return "freshness"
         case BalanceCheck(name=name):
             return f"balance_{name}"
+        case NoWithdrawalsCheck():
+            return "no_withdrawals"
     raise TypeError(f"unknown check: {check!r}")

@@ -39,15 +39,18 @@ raw/eia_wti_spot        download, keep the file untouched in data/raw/, record i
         ▼
 staged/eia_wti_spot     parse strictly, rebuild staged."eia_wti_spot", then run the contract's
         │               checks on that build: not_null_value, unique_measure_valid_date,
-        │               range_value, freshness. Failures open exceptions (ops.exceptions).
+        │               range_value, freshness, no_withdrawals. Failures open exceptions
+        │               (ops.exceptions).
         ▼
 published/eia_wti_spot  the gate: tier 1 publishes only if no error-level check failed;
                         tiers 2 and 3 publish marked "warn". Every attempt is logged.
 ```
 
-On the first live run all eight datasets published; the futures series (tier 3) is
-marked `warn` because its newest value is from April 2024, and its open exception
-carries the root cause `source_discontinued`.
+As of 2026-10-16, seven datasets publish. The futures series (tier 3) is marked `warn`
+because its newest value is from April 2024 (root cause `source_discontinued`). **WTI
+spot is blocked** by `no_withdrawals`: 744 daily prices that the history knows are
+missing from the source's current file (root cause `source_data_error`), and nobody has
+accepted that loss.
 
 Every staged table has the same long shape: one row per `(measure, valid_date)`, with
 the value, its unit, our instrument identifier, and the raw file and fetch time it came
@@ -100,6 +103,17 @@ python -m venv .venv
 In the UI, open **Assets** and choose **Materialize all** to download and stage every
 dataset (about 2 MB). Downloads go to `./data` (set `MERX_DATA_DIR` to change it);
 set `DAGSTER_HOME` to an absolute path to keep run history between sessions.
+
+The `merx` command covers what a person does by hand:
+
+```sh
+merx exceptions                                  # open exceptions first, with owners
+merx assign-root-cause 2 source_data_error --note "..."
+merx missing eia_wti_spot                        # values known before, missing now
+merx accept-withdrawals eia_wti_spot --reason "..."
+merx revisions eia_us_gas_storage
+merx as-known-at eia_us_crude_stocks 2015-01-01  # the dataset as it stood then
+```
 
 ## Layout
 

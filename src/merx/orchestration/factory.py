@@ -294,7 +294,9 @@ def run_contract_checks(
     con = connect(data_dir)
     try:
         for check in contract.checks:
-            outcome = run_check(con, staged_table(contract), check, datetime.now(UTC).date())
+            outcome = run_check(
+                con, staged_table(contract), check, datetime.now(UTC).date(), contract.id
+            )
             change = ops.record(
                 con,
                 dataset_id=contract.id,

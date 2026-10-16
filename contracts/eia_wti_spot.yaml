@@ -26,3 +26,4 @@ checks:
   - {type: range, column: value, min: -100, max: 300}
   # EIA refreshes this file about weekly, so the newest value can be several days old.
   - {type: freshness, max_age_days: 10}
+  - {type: no_withdrawals}

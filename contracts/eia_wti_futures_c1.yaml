@@ -24,3 +24,4 @@ checks:
   - {type: unique, columns: [measure, valid_date]}
   - {type: range, column: value, min: -100, max: 300}
   - {type: freshness, max_age_days: 10, severity: warn}
+  - {type: no_withdrawals}

@@ -25,3 +25,4 @@ checks:
   - {type: range, column: value, min: 100000, max: 800000}
   # Week ends Friday, published the next Wednesday, then a week until the next one.
   - {type: freshness, max_age_days: 14}
+  - {type: no_withdrawals}

@@ -6,6 +6,7 @@ uses them.
 | Term | Meaning |
 |---|---|
 | **As known at** | A dataset rebuilt exactly as it stood at a past moment, using only the versions known then. |
+| **Accepted withdrawal** | A value known before and missing now whose removal a person has signed off, with a reason. It no longer fails the withdrawal check. |
 | **Asset (Dagster)** | A dataset that Dagster knows how to build and tracks: here, a raw file (`raw/<id>`) or a staged table (`staged/<id>`). |
 | **Asset check (Dagster)** | A test attached to an asset, recorded with its result and evidence on every run. Each check in a contract becomes one. |
 | **Backwardation** | A forward curve where later delivery is cheaper than nearer delivery, usually a sign of tight supply. |
@@ -70,5 +71,6 @@ uses them.
 | **Valid date** | The date a value describes, as opposed to when it became known (knowledge time). |
 | **Version (point-in-time)** | One value of one (measure, date) during the time it was current, from when it became known to when it was revised or withdrawn. |
 | **Wayback Machine** | The Internet Archive's public collection of dated copies of web pages and files. Used here to recover past versions of source files. |
+| **Withdrawal** | A value that was in an earlier version of a dataset and is missing from the current one. |
 | **WTI (West Texas Intermediate)** | The main US crude oil price benchmark, priced at Cushing, Oklahoma. |
 | **Z-score** | How many typical deviations a value lies from normal. The robust version uses the median and MAD instead of the mean and standard deviation. |

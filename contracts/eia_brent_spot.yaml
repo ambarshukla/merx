@@ -22,3 +22,4 @@ checks:
   # Brent has never printed below zero; a negative value here would be a defect.
   - {type: range, column: value, min: 0, max: 300}
   - {type: freshness, max_age_days: 10}
+  - {type: no_withdrawals}
