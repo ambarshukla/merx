@@ -1,0 +1,44 @@
+# How much carbon dioxide each unit of GB electricity carried, per half hour —
+# both what was forecast and what actually happened.
+#
+# Most sources give one number per observation. This one gives two for the same half
+# hour, from the same publisher: the forecast made in advance, and the outturn. That
+# makes forecast accuracy measurable as data rather than as an opinion, and it is why
+# this dataset is here.
+#
+# The API publishes UTC half-hour windows and says nothing about settlement periods,
+# so the date and period are derived with the same rule Elexon settles on — which is
+# what makes the two datasets comparable half hour by half hour.
+id: neso_gb_carbon_intensity
+title: GB grid carbon intensity, forecast and outturn, half-hourly
+domain: carbon
+owner: carbon-data-steward
+tier: 2
+frequency: half_hourly
+instrument: GB_GRID_CARBON_INTENSITY
+unit: gCO2/kWh
+measures: [forecast, outturn]
+source:
+  provider: neso
+  format: carbon_intensity
+  url: https://api.carbonintensity.org.uk/intensity/{from}/{to}
+  series_key: gb_national
+  partitions: {by: month, start: "2025-01"}
+  columns:
+    forecast: forecast
+    outturn: actual
+schedule:
+  cron: "45 6 * * *"
+  timezone: Europe/London
+checks:
+  # No not_null check: the outturn for the newest half hours is published later than
+  # the forecast, so a gap at the end of the series is expected, not a fault.
+  - {type: unique, columns: [measure, valid_date, period]}
+  # Intensity cannot be negative, and the dirtiest half hours ever recorded in GB are
+  # around 550 gCO2/kWh; the ceiling leaves room without being meaningless.
+  - {type: range, column: value, min: 0, max: 1500}
+  - {type: periods_per_day, expected: 48, also_allow: [46, 50]}
+  - {type: no_gaps}
+  - {type: freshness, max_age_days: 3}
+  - {type: no_withdrawals}
+in_quality_lab: false

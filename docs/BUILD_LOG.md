@@ -397,3 +397,89 @@ the containers were `running` while the server was still binding its port. "Runn
 not "serving", and a container that started and then died would have passed the same
 check, so the deploy script now waits for the consoles to answer from inside the
 container, and the workflow waits for the public URL on top of that.
+
+## 2026-10-16: a model that fits more than one value a day
+
+**Built.** Observations now carry a `period` (0 for daily and coarser, 1..n within a day
+below that) and a `valid_time_utc` for display; `unit` may be given per measure; the
+`periods_per_day` and `no_gaps` checks; `sector` and `data_type` columns in
+`reference/instruments.csv`. Decisions D-017 and D-018. 142 tests.
+
+**Checked against the real data, not only fixtures.** Both representative datasets were
+restaged and their histories rebuilt from the raw zone, and the counts are unchanged:
+gas storage 876 staged rows and 883 history versions before and after; WTI spot 9,523 and
+10,284. Every existing row landed in period 0 with its unit intact, which is what the
+change is supposed to do — nothing.
+
+**Found.** Great Britain's clock-change days really do carry 46 and 50 settlement
+periods: Elexon returned 46 for 2026-03-29, 50 for 2025-10-26 and 48 for an ordinary day,
+each matching the prediction written before the probe. A timestamp key would have had to
+represent two distinct periods with the same local time on the autumn day.
+
+## 2026-10-16: power and carbon, Great Britain, every half hour
+
+**Built.** Two datasets on the new sub-daily model: `elexon_gb_power_price` (the GB
+day-ahead market index price and traded volume, from Elexon) and
+`neso_gb_carbon_intensity` (the grid's carbon intensity, **forecast and outturn**, from
+the National Grid API). Both arrive per half-hourly settlement period, both are fetched
+a month at a time, and both have their licences recorded in PROVENANCE before anything
+was published. 157 tests.
+
+**A shared clock.** Elexon states the settlement date and period; the carbon API
+publishes UTC half-hour windows and says nothing about periods, so merx derives them
+with the same rule. That is what makes the two comparable half hour by half hour — and
+the derivation is checked against Elexon's own numbers rather than trusted: it returns
+46 periods for 2026-03-29, 50 for 2025-10-26 and 48 otherwise, matching Elexon exactly,
+and 23:00Z in summer is period 1 of the *next* settlement day, as Elexon also reports.
+Where Elexon states both, merx compares them and fails if they ever disagree, because a
+provider changing convention would otherwise shift every value by half an hour.
+
+**Fetching a range the APIs will not serve.** Elexon caps a query at 7 days and the
+carbon API at about a month, while a partition here is a padded calendar month. Both are
+walked in chunks and merged into one raw file, so the raw zone keeps whole artifacts
+rather than fragments whose meaning depends on how they were split.
+
+**What the data says** (2026-03 to 2026-10, 5,177 half hours of each measure):
+- GB power ran from **−£24.93** to **£366.66** per MWh. **118 half hours priced below
+  zero** — 2.3% of them — the cheapest around midday on Sunday 2026-03-15. Negative
+  prices are not an error here; they are what happens when there is more generation than
+  the system wants.
+- Carbon intensity averaged 116 gCO2/kWh outturn against 114 forecast. The forecast
+  error has a mean of **+2.2** and a mean absolute error of **12.0** gCO2/kWh, with
+  **82.5%** of half hours within 20, and a worst case of 165. No modelling was needed to
+  measure that: the publisher gives both numbers, so accuracy is simply data.
+- The carbon API publishes forecasts about two days ahead, so the dataset legitimately
+  contains **96 rows dated in the future**, whose outturn is still empty. Freshness is
+  governed by the stalest measure, which is the outturn, so a stalled feed still shows.
+
+## 2026-10-16: metals, agriculture and a second opinion on oil
+
+**Built.** Eight datasets from the World Bank's Pink Sheet — copper, aluminium, gold,
+wheat, maize, soybeans, and monthly WTI and Brent — each a contract of about thirty
+lines reading one column of the same monthly spreadsheet. The reader is one file; the
+eight datasets are configuration. With these, merx covers all six sectors: oil, gas,
+power, carbon, metals and agriculture. 164 tests.
+
+**Units are checked, not assumed.** The Pink Sheet states each column's unit on its own
+header row, and the reader compares it with the contract. A benchmark quietly repriced
+from $/mt to $/kg would otherwise multiply a series by a thousand and sail through any
+range check wide enough to allow it.
+
+**Two institutions, one benchmark.** The World Bank publishes a monthly WTI price; EIA
+publishes WTI daily. Over the **489 months** both cover, the World Bank's figure differs
+from the mean of EIA's daily prices by **17 cents on average**, and by as much as
+**$3.03** (May 2026). Only 34 of those months agree to within a cent. Part of that is
+rounding — the World Bank publishes to a tenth of a dollar — and the rest is method.
+Neither is wrong. It is the difference between two institutions computing "the monthly
+average price of WTI", and it is the kind of difference a tolerance exists for, unlike
+the two-channel reconciliations already here, where the answer should be exact.
+
+**Found in the file.** The published workbook's *first* sheet is called "Mismatch
+Details" — the World Bank's own internal comparison of the release against the previous
+one, listing cells that went from a number to blank (2020 barley and sorghum). The
+publisher ships its own reconciliation report inside the data file.
+
+**Volume.** Each contract keeps its own copy of the 586 KB download, about 19 MB a month
+across the eight. That is deliberate — one contract, one pipeline, no shared state — and
+it is the clearest argument yet for deduplicating identical raw downloads by checksum,
+which is still the recorded follow-up.

@@ -393,3 +393,114 @@ not come back fails the workflow on `main` and is visible. The runner accepts th
 key on first use (`ssh-keyscan`); the exposure is a deploy key that can only deploy, and
 the smoke test would show a deploy that never arrived. Data is out of scope: a new
 dataset's backfill is still run on the host.
+
+## D-017: Sub-daily data is keyed by (date, period), not by a timestamp (2026-10-16)
+
+**Context.** Every dataset so far has at most one value per date. Power does not: Great
+Britain settles electricity in half-hourly periods, and the obvious model — a UTC
+timestamp per observation — cannot represent the days the clocks change. Those days have
+23 or 25 local hours, so 46 or 50 settlement periods, and two of the local times on the
+autumn day name two different periods.
+
+**Decision.** Observations carry a `period` alongside `valid_date`: 1..n within the day
+for sub-daily data, and **0 for daily and coarser data, meaning "the whole day"**. This
+is how the market itself settles, which is the reason it works — the clock-change days
+are 46 and 50 periods and nothing is ambiguous. The UTC start of each period is stored
+beside it as `valid_time_utc`, for display and ordering, and is never part of a key.
+Keeping `period` non-null for every dataset, rather than null for daily data, means each
+key, join and grouping in the engine is written once: in SQL a null never equals a null,
+so a nullable key column would have silently broken every reconciliation.
+
+Two checks come with it. `periods_per_day` counts the periods on each day and accepts the
+clock-change lengths when the contract declares them; `no_gaps` looks for holes, so a day
+with period 7 missing and period 49 present fails even though the count is right. Both
+skip the newest day, which is usually still filling up; freshness is what notices a day
+that never arrives.
+
+**Alternatives considered.** A UTC timestamp as the key (fails on clock-change days, and
+diverges from how the market and the data provider both speak); local time plus a
+daylight-saving flag (expressible, but every query then needs the flag and it is easy to
+forget); a separate table shape for sub-daily datasets (no change to existing code, at
+the cost of two engines to maintain, which is the opposite of this project's claim).
+
+**Consequences.** Existing datasets were rebuilt and came out byte-identical in count:
+gas storage 876 rows and 883 history versions before and after, WTI 9,523 and 10,284.
+The detectors still take one value per date, so anomaly checks are not yet available on
+sub-daily series; the lab scores them before that happens. Acceptances recorded in
+`ops.accepted_withdrawals` before this change are migrated in place rather than being
+re-asked of a person.
+
+## D-018: A unit per measure, and a sector taxonomy in reference data (2026-10-16)
+
+**Context.** A contract declares one `unit` for the whole dataset. That holds while a
+file carries one series, and breaks on the first file that does not: the World Bank's
+price sheet puts $/bbl, $/mt and $/troy oz side by side in one table. Separately, the
+catalogue needs to be browsable by sector once it stops being only oil and gas.
+
+**Decision.** `unit` accepts either a string, as now, or a mapping of measure to unit,
+validated to name every measure and only those; `contract.unit_for(measure)` is what the
+engine calls, and staged rows already carried a unit each. The taxonomy goes in
+`reference/instruments.csv` as `sector` and `data_type` columns rather than onto the
+contract, because they describe the instrument, not the dataset — and because the file
+already carried `kind`, which `data_type` is derived from. `domain` on the contract is
+now constrained to the sector list it was informally using.
+
+**Alternatives considered.** Moving units inside `measures` as a mapping of objects (more
+expressive, rewrites all eleven contracts and every reader that treats `measures` as a
+list); a `data_type` field on each contract (duplicates what the instrument already says,
+and lets the two disagree); a separate sectors table (a column on the instrument is
+enough until a sector needs attributes of its own).
+
+**Consequences.** A dataset may mix units, which the client has to show per measure
+rather than once per dataset. Unit *conversion* is deliberately not built: it waits for
+the first source that needs the same quantity compared across units.
+
+## D-019: One clock for Great Britain, derived where a source does not state it (2026-10-16)
+
+**Context.** The two GB sources describe the same half hours differently. Elexon states a
+settlement date and a period number. The carbon intensity API publishes UTC half-hour
+windows and never mentions periods. Comparing them — the whole point of having both — is
+only possible if they end up on one clock.
+
+**Decision.** `merx.sources.gb` owns the rule: a settlement period is counted in elapsed
+local time since local midnight, so a day holds 46, 48 or 50 of them. Elexon's stated
+values are used as given but **checked** against the rule, and a disagreement fails the
+parse. The carbon API's periods are derived with the same rule. Elapsed time is used
+rather than wall-clock arithmetic because on the autumn day 01:30 happens twice, and an
+hour-of-day calculation would collide the two into one period.
+
+**Alternatives considered.** Trusting each provider's own convention (no shared clock, so
+no comparison); storing UTC timestamps and deriving periods at query time (pushes the
+hard part into every query, and the ambiguous hour stays ambiguous); using Elexon as the
+authority and joining the carbon data by timestamp (works until a clock-change day).
+
+**Consequences.** The derivation was verified against Elexon rather than assumed: 46
+periods for 2026-03-29, 50 for 2025-10-26, 48 otherwise, and 23:00Z in summer is period
+1 of the next settlement day — all matching Elexon's own output. Both GB datasets can be
+joined half hour by half hour. A provider that changes convention breaks loudly instead
+of shifting every value by thirty minutes.
+
+## D-020: One contract per commodity, and units checked against the file (2026-10-16)
+
+**Context.** The World Bank's Pink Sheet is a single monthly spreadsheet holding about
+seventy commodities across three sectors, each in its own column and its own unit. A
+dataset in merx has one instrument, so a single contract covering the whole sheet would
+have to abandon the instrument and crosswalk model that everything else relies on.
+
+**Decision.** Each commodity is its own contract reading its own column, named by
+`series_key`, with its own instrument and crosswalk entry. The format is treated as
+single-series. Separately, because the file states each column's unit on a header row,
+the reader compares that against the contract's declared unit and fails on a mismatch.
+
+**Alternatives considered.** One contract with a measure per commodity (fewer downloads,
+but one instrument cannot describe copper and wheat, and the crosswalk would have
+nothing to key on); a shared "source" asset feeding many contracts (saves the duplicate
+downloads at the cost of shared state between pipelines, which is the thing this design
+avoids); trusting the stated units (a benchmark repriced from $/mt to $/kg rescales a
+series by a thousand and still looks plausible).
+
+**Consequences.** Eight datasets were added as configuration, with no code beyond the one
+reader, and the catalogue reached all six sectors. Each contract keeps its own copy of
+the 586 KB file, about 19 MB a month in total; that duplication is the price of one
+contract per pipeline and is the clearest argument yet for the recorded follow-up of
+deduplicating identical raw downloads by checksum.

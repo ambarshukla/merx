@@ -12,15 +12,20 @@
   <nav><a class="here" href="/client">Data</a><a href="/sources">Two sources</a><a href="/ops">Operations</a></nav>
 </header>
 <main>
-  <section>
-    <div class="row">
-      <label>Series <select id="dataset"></select></label>
-      <label id="measure-wrap">Measure <select id="measure"></select></label>
-      <span class="row" id="ranges">
-        <button data-years="1">1Y</button><button data-years="5">5Y</button>
-        <button data-years="15">15Y</button><button data-years="0">All</button>
-      </span>
+  <section class="panel">
+    <div class="row" style="justify-content: space-between; align-items: flex-start">
+      <div>
+        <h2 style="margin:0 0 3px"><span data-explain="sector">Browse by sector</span></h2>
+        <div class="small muted" id="catalog-count"></div>
+      </div>
+      <label class="small muted">Show
+        <select id="type-filter">
+          <option value="">every type of data</option>
+        </select>
+      </label>
     </div>
+    <div class="sectors" id="sectors" style="margin-top:10px"></div>
+    <div class="catalog" id="catalog" style="margin-top:10px"></div>
   </section>
 
   <section class="panel">
@@ -33,18 +38,26 @@
     </div>
     <div id="held" class="note small" style="display:none; margin-top:10px"></div>
     <div class="row" style="margin-top:12px">
-      <label>As known on <input type="date" id="asof"></label>
+      <label id="measure-wrap">Measure <select id="measure"></select></label>
+      <span class="row" id="ranges">
+        <button data-years="1">1Y</button><button data-years="5">5Y</button>
+        <button data-years="15">15Y</button><button data-years="0">All</button>
+      </span>
+      <label><span data-explain="as-known-on">As known on</span>
+        <input type="date" id="asof"></label>
       <span class="small muted" id="presets"></span>
       <button id="clear-asof">Clear</button>
     </div>
     <div class="legend" id="legend" style="margin-top:10px"></div>
     <div class="chart" id="chart"></div>
     <div class="small muted" id="asof-note"></div>
+    <div class="small muted" id="series-note" style="margin-top:6px"></div>
   </section>
 
   <section class="grid">
     <div class="panel">
-      <h2>Revisions and withdrawals</h2>
+      <h2><span data-explain="revision">Revisions</span> and
+        <span data-explain="withdrawal">withdrawals</span></h2>
       <div class="small muted" style="margin-bottom:8px">
         Values the source has changed or removed since they were first known. Every
         version is kept; nothing is overwritten.
@@ -54,23 +67,38 @@
     <div class="panel">
       <h2>About this data</h2>
       <div class="small">
-        <p>Only the <b>published</b> layer is shown here: data that passed the publish
-          gate. Tier 1 series are published only when no critical check fails; other
-          tiers are published marked <span class="badge warn">warn</span>.</p>
+        <p>Only the <b>published</b> layer is shown here: data that passed the
+          <span data-explain="publish-gate">publish gate</span>.
+          <span data-explain="tier">Tier</span> 1 series are published only when no
+          critical <span data-explain="check">check</span> fails; other tiers are
+          published marked <span class="badge warn">warn</span>.</p>
         <p><b>As known on</b> rebuilds the series exactly as it stood on that date, from
           every version in the history. Before this project began downloading
           (2026-10-15), versions come from dated copies in the Internet Archive's Wayback
           Machine, counted from the archive's capture time: an upper bound on when they
           were public.</p>
         <p><b>Sources:</b> U.S. Energy Information Administration (EIA); U.S. Commodity
-          Futures Trading Commission (CFTC); past copies via the Internet Archive's Wayback
-          Machine. All public domain or public; nothing here is endorsed by them. See the project's
-          PROVENANCE document.</p>
+          Futures Trading Commission (CFTC); Elexon (<i>Contains BMRS data © Elexon
+          Limited copyright and database right 2026</i>); National Grid carbon intensity
+          API (CC BY 4.0); World Bank Commodity Price Data, the Pink Sheet (CC BY 4.0);
+          past copies via the Internet Archive's Wayback Machine. Nothing here is
+          endorsed by any of them. See the project's PROVENANCE document.</p>
       </div>
     </div>
   </section>
+
+  <section class="panel">
+    <h2>What the words mean</h2>
+    <div class="small muted" style="margin-bottom:8px">
+      Every term this page uses, in plain English — the ones relevant to whatever is
+      selected appear first. The <span class="explain-mark" style="cursor:default">?</span>
+      marks around the page show the same explanations where they are used.
+    </div>
+    <div id="concepts" class="small"></div>
+  </section>
 </main>
 <script src="/static/chart.js"></script>
+<script src="/static/explain.js"></script>
 <script>
 "use strict";
 const PRESETS = {
@@ -80,7 +108,25 @@ const PRESETS = {
   eia_brent_spot: [["2026-08-31", "before 890 values were dropped"]],
   eia_henry_hub_spot: [["2026-06-01", "before 1,768 values were dropped"]],
 };
-let catalog = [], current = null, years = 15;
+// Which explanations matter most for a given kind of dataset.
+const CONCEPTS_FOR = {
+  power: ["settlement-period", "negative-price", "spot-price"],
+  carbon: ["carbon-intensity", "forecast-error", "settlement-period"],
+  metals: ["benchmark", "unit", "reconciliation"],
+  ags: ["benchmark", "unit"],
+  oil: ["spot-price", "benchmark", "negative-price"],
+  gas: ["spot-price", "benchmark"],
+};
+const ALWAYS = ["contract", "sector", "data-type", "measure", "unit", "tier",
+  "publish-gate", "check", "exception", "freshness", "as-known-on", "revision",
+  "withdrawal", "reconciliation", "spot-price", "benchmark", "negative-price",
+  "settlement-period", "carbon-intensity", "forecast-error"];
+const SECTOR_LABEL = {oil: "Oil", gas: "Gas", power: "Power", carbon: "Carbon",
+  metals: "Metals", ags: "Agriculture"};
+const TYPE_LABEL = {spot: "price", fundamental: "fundamental", positioning: "positioning",
+  environmental: "environmental", curve: "curve", index: "index"};
+
+let catalog = [], current = null, years = 15, sector = "all", dataType = "";
 
 function since(yearsBack, last) {
   if (!yearsBack) return null;
@@ -89,13 +135,58 @@ function since(yearsBack, last) {
   return d.toISOString().slice(0, 10);
 }
 
+function visible() {
+  return catalog.filter((c) =>
+    (sector === "all" || c.sector === sector) && (!dataType || c.data_type === dataType));
+}
+
+function drawSectors() {
+  const counts = {};
+  catalog.forEach((c) => (counts[c.sector] = (counts[c.sector] || 0) + 1));
+  const order = ["oil", "gas", "power", "carbon", "metals", "ags"].filter((s) => counts[s]);
+  const el = document.getElementById("sectors");
+  el.innerHTML =
+    `<button data-sector="all" class="${sector === "all" ? "here" : ""}">All sectors
+       <span class="n">${catalog.length}</span></button>` +
+    order.map((s) => `<button data-sector="${s}" class="${sector === s ? "here" : ""}">
+       ${SECTOR_LABEL[s] || s}<span class="n">${counts[s]}</span></button>`).join("");
+  el.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+    sector = b.dataset.sector;
+    drawSectors(); drawCatalog();
+  }));
+}
+
+function drawCatalog() {
+  const shown = visible();
+  document.getElementById("catalog-count").textContent =
+    `${shown.length} of ${catalog.length} published datasets` +
+    (sector === "all" ? " across six sectors" : ` in ${SECTOR_LABEL[sector] || sector}`);
+  document.getElementById("catalog").innerHTML = shown.map((c) => `
+    <button class="card ${current && c.id === current.id ? "here" : ""}" data-id="${c.id}">
+      <span class="name">${esc(c.title)}</span>
+      <span class="facts">
+        ${badge(c.quality_status)}
+        <span class="tag">${esc(TYPE_LABEL[c.data_type] || c.data_type)}</span>
+        <span class="tag">${esc(c.frequency.replace("_", "-"))}</span>
+        <span class="tag">${esc(typeof c.unit === "string" ? c.unit : Object.values(c.units).join(" · "))}</span>
+      </span>
+      <span class="small muted">to ${c.last_date}${c.latest_attempt === "blocked" ? " · newer data held back" : ""}</span>
+    </button>`).join("") ||
+    `<div class="muted small">Nothing published in this sector yet.</div>`;
+  document.getElementById("catalog").querySelectorAll(".card").forEach((b) =>
+    (b.onclick = () => select(b.dataset.id)));
+}
+
 async function load() {
   catalog = await getJSON("/api/client/datasets");
-  const sel = document.getElementById("dataset");
-  sel.innerHTML = catalog.map((c) => `<option value="${c.id}">${esc(c.title)}</option>`).join("");
+  const types = [...new Set(catalog.map((c) => c.data_type))].sort();
+  const filter = document.getElementById("type-filter");
+  filter.innerHTML = `<option value="">every type of data</option>` +
+    types.map((t) => `<option value="${t}">${esc(TYPE_LABEL[t] || t)} only</option>`).join("");
+  filter.onchange = () => { dataType = filter.value; drawCatalog(); };
+
   const start = new URLSearchParams(location.search).get("dataset") || "eia_us_crude_stocks";
-  if (catalog.some((c) => c.id === start)) sel.value = start;
-  sel.onchange = () => select(sel.value);
+  current = catalog.find((c) => c.id === start) || catalog[0];
   document.querySelectorAll("#ranges button").forEach((b) =>
     (b.onclick = () => { years = +b.dataset.years; draw(); }));
   document.getElementById("asof").onchange = draw;
@@ -104,18 +195,25 @@ async function load() {
     document.getElementById("asof").value = ""; draw();
   };
   window.addEventListener("resize", () => current && draw());
-  select(sel.value);
+  drawSectors();
+  select(current.id);
 }
 
 function select(id) {
   current = catalog.find((c) => c.id === id);
   if (!current) return;
+  // Sub-daily series hold thousands of points a month: a 15-year default would be
+  // meaningless and slow, so they open on a short window.
+  if (current.sub_daily && years > 1) years = 1;
   const m = document.getElementById("measure");
   m.innerHTML = current.measures.map((x) => `<option>${x}</option>`).join("");
   document.getElementById("measure-wrap").style.display = current.measures.length > 1 ? "" : "none";
   document.getElementById("title").textContent = current.title;
+  const unit = typeof current.unit === "string" ? current.unit
+    : Object.entries(current.units).map(([k, v]) => `${k} in ${v}`).join(", ");
   document.getElementById("meta").textContent =
-    `${current.unit} · ${current.frequency} · ${current.first_date} to ${current.last_date} · ` +
+    `${SECTOR_LABEL[current.sector] || current.sector} · ${unit} · ` +
+    `${current.frequency.replace("_", "-")} · ${current.first_date} to ${current.last_date} · ` +
     `published ${current.published_at_utc?.slice(0, 16).replace("T", " ")} UTC`;
   document.getElementById("status").innerHTML = badge(current.quality_status);
   const held = document.getElementById("held");
@@ -132,10 +230,13 @@ function select(id) {
   document.querySelectorAll("#presets a").forEach((a) => (a.onclick = (e) => {
     e.preventDefault(); document.getElementById("asof").value = a.dataset.d; draw();
   }));
-  // A link can carry a date: /client?dataset=eia_us_crude_stocks&asof=2016-06-01
   const linked = new URLSearchParams(location.search);
   document.getElementById("asof").value =
     linked.get("dataset") === id && linked.get("asof") ? linked.get("asof") : "";
+  // Put the concepts that matter for this dataset at the top of the list.
+  const first = CONCEPTS_FOR[current.sector] || [];
+  renderConcepts("concepts", [...first, ...ALWAYS.filter((k) => !first.includes(k))]);
+  drawCatalog();
   draw();
 }
 
@@ -157,13 +258,20 @@ async function draw() {
       ? `${h.points.length} values were known on ${asof}. ${h.basis}.`
       : `Nothing in the history was known on ${asof}.`;
   }
-  // CSS variables do not resolve inside SVG attributes in every browser: resolve them.
   const css = getComputedStyle(document.documentElement);
   series.forEach((s) => (s.color = s.color.startsWith("var(")
     ? css.getPropertyValue(s.color.slice(4, -1)).trim() : s.color));
   document.getElementById("legend").innerHTML = series.map((s) =>
     `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("");
   lineChart(document.getElementById("chart"), series, { unit: pub.unit });
+
+  const negatives = pub.points.filter(([, v]) => v !== null && v < 0).length;
+  document.getElementById("series-note").innerHTML =
+    `${pub.points.length.toLocaleString()} values shown` +
+    (current.sub_daily ? `, one per <span data-explain="settlement-period">settlement period</span>` : "") +
+    (negatives ? ` · <b>${negatives}</b> below zero, which is real here, not an error` : "");
+  // The note is rebuilt, so its ? marks have to be re-attached.
+  if (window.explainAgain) window.explainAgain();
 
   const rev = await getJSON(`/api/client/series/${current.id}/revisions?measure=${measure}`);
   document.getElementById("revisions").innerHTML = rev.length ? `

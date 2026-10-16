@@ -20,10 +20,15 @@ def test_cron_day_fields():
     assert cron_days("0,7") == {0}
 
 
-def test_a_weekday_night_runs_the_daily_prices_only():
-    # 00:30 UTC on a Tuesday is Monday evening in New York.
+def test_a_weekday_night_runs_the_daily_prices_and_the_gb_half_hourly_sets():
+    # 00:30 UTC on a Tuesday is Monday evening in New York, and Tuesday morning in
+    # London: the GB power and carbon datasets have their own per-month jobs.
     due = names(datetime(2026, 10, 20, 0, 30, tzinfo=UTC))
-    assert due == {"refresh_30_18_x_x_1to5_new_york"}
+    assert due == {
+        "refresh_30_18_x_x_1to5_new_york",
+        "refresh_elexon_gb_power_price",
+        "refresh_neso_gb_carbon_intensity",
+    }
 
 
 def test_wednesday_adds_crude_stocks_and_thursday_gas_storage():
@@ -42,5 +47,17 @@ def test_friday_refreshes_this_years_cftc_partition():
     }
 
 
-def test_the_weekend_runs_nothing():
-    assert names(datetime(2026, 10, 25, 0, 30, tzinfo=UTC)) == set()  # Saturday NY
+def test_the_weekend_runs_only_the_markets_that_trade_then():
+    """US spot prices and the weekly reports stop at the weekend. Electricity does not:
+    GB settles every half hour of every day, so those two datasets still refresh."""
+    saturday = names(datetime(2026, 10, 25, 0, 30, tzinfo=UTC))  # Saturday NY
+    assert saturday == {"refresh_elexon_gb_power_price", "refresh_neso_gb_carbon_intensity"}
+
+
+def test_a_monthly_source_refreshes_the_month_in_progress():
+    jobs = due_jobs(CONTRACTS, datetime(2026, 10, 20, 0, 30, tzinfo=UTC))
+    monthly = {j.name: j.partition_key for j in jobs if "gb_" in j.name}
+    assert monthly == {
+        "refresh_elexon_gb_power_price": "2026-10",
+        "refresh_neso_gb_carbon_intensity": "2026-10",
+    }

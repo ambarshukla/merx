@@ -35,8 +35,8 @@ def reconcile(
     con.execute(
         f"""
         CREATE OR REPLACE TABLE {recon_table(contract)} AS
-        WITH h AS (SELECT measure, valid_date, value FROM {here}),
-             t AS (SELECT measure, valid_date, value FROM {there}),
+        WITH h AS (SELECT measure, valid_date, period, value FROM {here}),
+             t AS (SELECT measure, valid_date, period, value FROM {there}),
              h_range AS (SELECT measure, min(valid_date) AS lo, max(valid_date) AS hi
                          FROM h GROUP BY measure),
              t_range AS (SELECT measure, min(valid_date) AS lo, max(valid_date) AS hi
@@ -47,7 +47,7 @@ def reconcile(
                        h.value AS value_here, t.value AS value_there,
                        h.valid_date IS NOT NULL AS in_here,
                        t.valid_date IS NOT NULL AS in_there
-                FROM h FULL OUTER JOIN t USING (measure, valid_date)
+                FROM h FULL OUTER JOIN t USING (measure, valid_date, period)
              )
         SELECT j.measure, j.valid_date, j.value_here, j.value_there,
                CASE

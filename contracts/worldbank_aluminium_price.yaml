@@ -1,0 +1,40 @@
+# Aluminium price, monthly — from the World Bank's Pink Sheet.
+#
+# Spelled 'Aluminum' in the file: the column name is the source's, not ours.
+#
+# One monthly spreadsheet carries about 70 commodities across metals, agriculture and
+# energy. Each commodity is its own contract reading its own column, so adding the next
+# one is a file and no code. The file states its units on a header row, and the reader
+# checks them against this contract: a benchmark quietly repriced from $/mt to $/kg
+# would otherwise rescale the series by a thousand and pass every other check.
+id: worldbank_aluminium_price
+title: Aluminium price, monthly
+domain: metals
+owner: metals-data-steward
+tier: 3
+frequency: monthly
+instrument: ALUMINIUM_GLOBAL_MONTHLY
+unit: USD/mt
+measures: [price]
+source:
+  provider: worldbank
+  format: worldbank_pink_sheet
+  # The path carries a release hash; re-resolve it from the Commodity Markets page if
+  # this ever 404s.
+  url: https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/related/CMO-Historical-Data-Monthly.xlsx
+  series_key: "Aluminum"
+schedule:
+  # The sheet is updated monthly, early in the month. Checked weekly so a late or early
+  # release is picked up rather than waited for.
+  cron: "0 13 * * 2"
+  timezone: America/New_York
+checks:
+  # No not_null check: the early decades are genuinely blank for most commodities, and
+  # the file marks them with a placeholder glyph rather than a zero.
+  - {type: unique, columns: [measure, valid_date]}
+  - {type: range, column: value, min: 0, max: 100000}
+  # Monthly data published in arrears: 45 days is normal, 70 allows for a late release.
+  - {type: freshness, max_age_days: 70}
+  - {type: no_withdrawals}
+# The lab has not scored detectors on monthly benchmark prices yet, so no anomaly check.
+in_quality_lab: false

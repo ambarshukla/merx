@@ -41,23 +41,23 @@ def pit_table(contract: Contract) -> str:
 
 
 def replay(contract: Contract, zone: RawZone) -> list[tuple]:
-    """Rows of (measure, valid_date, value, known_from, known_to, ended_by, raw_path,
-    origin), from every raw file of the dataset in knowledge-time order."""
+    """Rows of (measure, valid_date, period, value, known_from, known_to, ended_by,
+    raw_path, origin), from every raw file of the dataset in knowledge-time order."""
     rows: list[tuple] = []
-    current: dict[tuple[str | None, str, date], _Open] = {}
+    current: dict[tuple[str | None, str, date, int], _Open] = {}
     for landed in zone.history(contract.id):
-        observations = formats.read(zone.read(landed), contract).observations
+        observations = formats.read(zone.read(landed), contract, landed.partition).observations
         at = landed.fetched_at_utc
-        seen: set[tuple[str | None, str, date]] = set()
-        for measure, valid_date, value in observations:
-            key = (landed.partition, measure, valid_date)
+        seen: set[tuple[str | None, str, date, int]] = set()
+        for obs in observations:
+            key = (landed.partition, obs.measure, obs.valid_date, obs.period)
             seen.add(key)
             old = current.get(key)
-            if old is not None and old.value == value:
+            if old is not None and old.value == obs.value:
                 continue
             if old is not None:
                 rows.append(_row(key, old, at, "revised"))
-            current[key] = _Open(value, at, landed.path, landed.origin)
+            current[key] = _Open(obs.value, at, landed.path, landed.origin)
         for key in [k for k in current if k[0] == landed.partition and k not in seen]:
             rows.append(_row(key, current.pop(key), at, "withdrawn"))
     rows.extend(_row(key, version, None, None) for key, version in current.items())
@@ -65,10 +65,11 @@ def replay(contract: Contract, zone: RawZone) -> list[tuple]:
 
 
 def _row(key, version: _Open, known_to: datetime | None, ended_by: str | None) -> tuple:
-    _, measure, valid_date = key
+    _, measure, valid_date, period = key
     return (
         measure,
         valid_date,
+        period,
         version.value,
         version.known_from,
         known_to,
@@ -86,6 +87,7 @@ def build(con: duckdb.DuckDBPyConnection, contract: Contract, zone: RawZone) -> 
     columns = [
         ("measure", pa.string()),
         ("valid_date", pa.date32()),
+        ("period", pa.int32()),
         ("value", pa.float64()),
         ("known_from_utc", pa.timestamp("us")),
         ("known_to_utc", pa.timestamp("us")),
@@ -98,14 +100,14 @@ def build(con: duckdb.DuckDBPyConnection, contract: Contract, zone: RawZone) -> 
     con.register("incoming", table)
     con.execute(
         f"CREATE OR REPLACE TABLE {pit_table(contract)} AS "
-        "SELECT * FROM incoming ORDER BY measure, valid_date, known_from_utc"
+        "SELECT * FROM incoming ORDER BY measure, valid_date, period, known_from_utc"
     )
     con.unregister("incoming")
     versions, keys, revised, withdrawn, first_known = con.execute(
         f"""
         SELECT count(*),
-               count(DISTINCT (measure, valid_date)),
-               count(DISTINCT (measure, valid_date)) FILTER (WHERE ended_by = 'revised'),
+               count(DISTINCT (measure, valid_date, period)),
+               count(DISTINCT (measure, valid_date, period)) FILTER (WHERE ended_by = 'revised'),
                count(*) FILTER (WHERE ended_by = 'withdrawn'),
                min(known_from_utc)
         FROM {pit_table(contract)}
@@ -124,11 +126,11 @@ def build(con: duckdb.DuckDBPyConnection, contract: Contract, zone: RawZone) -> 
 def as_known_at(
     con: duckdb.DuckDBPyConnection, contract: Contract, at: datetime
 ) -> list[tuple[str, date, float | None]]:
-    """The dataset exactly as it was known at ``at`` (UTC): (measure, valid_date, value)."""
+    """The dataset as it was known at ``at`` (UTC): (measure, valid_date, period, value)."""
     return con.execute(
-        f"SELECT measure, valid_date, value FROM {pit_table(contract)} "
+        f"SELECT measure, valid_date, period, value FROM {pit_table(contract)} "
         "WHERE known_from_utc <= ? AND (known_to_utc IS NULL OR known_to_utc > ?) "
-        "ORDER BY measure, valid_date",
+        "ORDER BY measure, valid_date, period",
         [at, at],
     ).fetchall()
 
@@ -138,15 +140,15 @@ def revisions(con: duckdb.DuckDBPyConnection, contract: Contract) -> list[tuple]
     number of versions, when it first changed)."""
     return con.execute(
         f"""
-        SELECT measure, valid_date,
+        SELECT measure, valid_date, period,
                -- first/last keep NULLs; arg_min/arg_max would skip a missing value
                first(value ORDER BY known_from_utc) AS first_value,
                last(value ORDER BY known_from_utc) AS latest_value,
                count(*) AS versions,
                min(known_to_utc) AS first_changed_utc
         FROM {pit_table(contract)}
-        GROUP BY measure, valid_date
+        GROUP BY measure, valid_date, period
         HAVING count(*) > 1
-        ORDER BY measure, valid_date
+        ORDER BY measure, valid_date, period
         """
     ).fetchall()

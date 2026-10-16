@@ -13,20 +13,21 @@ new file format.
 import os
 import re
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import dagster as dg
 
 from merx.contracts import Contract, check_name
+from merx.contracts.model import MonthlyPartitions
 from merx.engine import formats, ops, pit, reconcile
 from merx.engine.checks import run_check
 from merx.engine.publish import publish, published_table
 from merx.engine.stage import stage, staged_table
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import Reference
-from merx.sources import eia_api, wayback
+from merx.sources import carbon, eia_api, elexon, wayback
 from merx.store import connect
 from merx.store.raw import RawZone
 
@@ -70,13 +71,42 @@ def _tags(contract: Contract) -> dict[str, str]:
 
 
 def partitions_def(contract: Contract) -> dg.StaticPartitionsDefinition | None:
-    """One partition per year, from the contract's start year to the current year."""
+    """One partition per yearly file, or one per month for sources fetched by range."""
     p = contract.source.partitions
     if p is None:
         return None
+    if isinstance(p, MonthlyPartitions):
+        return dg.StaticPartitionsDefinition(_months(p.start, datetime.now(UTC).date()))
     return dg.StaticPartitionsDefinition(
         [str(y) for y in range(p.start, datetime.now(UTC).year + 1)]
     )
+
+
+def _months(start: str, until: date) -> list[str]:
+    """Every ``YYYY-MM`` from ``start`` to the month containing ``until``."""
+    year, month = (int(part) for part in start.split("-"))
+    out = []
+    while (year, month) <= (until.year, until.month):
+        out.append(f"{year:04d}-{month:02d}")
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return out
+
+
+def partition_url(contract: Contract, partition: str | None) -> str:
+    """The URL for one partition: a year in the path, or a padded date range."""
+    url = contract.source.url
+    p = contract.source.partitions
+    if partition is None or p is None:
+        return url
+    if isinstance(p, MonthlyPartitions):
+        year, month = (int(part) for part in partition.split("-"))
+        first = date(year, month, 1)
+        next_first = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+        pad = timedelta(days=p.pad_days)
+        return url.replace("{from}", f"{first - pad}T00:00Z").replace(
+            "{to}", f"{next_first + pad}T00:00Z"
+        )
+    return url.replace("{year}", partition)
 
 
 def _fetch_api(contract: Contract, fetcher: HttpFetcher) -> bytes:
@@ -90,6 +120,36 @@ def _fetch_api(contract: Contract, fetcher: HttpFetcher) -> bytes:
         contract.source.series_key,
         contract.frequency,
         key,
+    )
+
+
+def partition_window(contract: Contract, partition: str) -> tuple[datetime, datetime]:
+    """The padded instants a monthly partition covers."""
+    p = contract.source.partitions
+    assert isinstance(p, MonthlyPartitions)
+    year, month = (int(part) for part in partition.split("-"))
+    first = datetime(year, month, 1, tzinfo=UTC)
+    next_first = (
+        datetime(year + 1, 1, 1, tzinfo=UTC)
+        if month == 12
+        else datetime(year, month + 1, 1, tzinfo=UTC)
+    )
+    pad = timedelta(days=p.pad_days)
+    return first - pad, next_first + pad
+
+
+# Sources that answer a date range, but a narrower one than a padded month, so the
+# partition is fetched in chunks and kept as one raw file.
+_CHUNKED_FETCH = {
+    "elexon_mid": elexon.fetch_range,
+    "carbon_intensity": carbon.fetch_range,
+}
+
+
+def _fetch_range(contract: Contract, fetcher: HttpFetcher, partition: str) -> bytes:
+    start, end = partition_window(contract, partition)
+    return _CHUNKED_FETCH[contract.source.format](
+        lambda u: fetcher.fetch(u).content, contract.source.url, start, end
     )
 
 
@@ -115,9 +175,12 @@ def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefi
         context: dg.AssetExecutionContext, fetcher: HttpFetcher, store: DataStore
     ) -> dg.MaterializeResult:
         partition = context.partition_key if partitioned else None
-        url = contract.source.url.replace("{year}", partition or "")
+        url = partition_url(contract, partition)
         if contract.source.format == "eia_api_v2":
             content, status, headers = _fetch_api(contract, fetcher), 200, {}
+        elif contract.source.format in _CHUNKED_FETCH:
+            assert partition is not None
+            content, status, headers = _fetch_range(contract, fetcher, partition), 200, {}
         else:
             result = fetcher.fetch(url)
             content, status, headers = result.content, result.status, result.headers
@@ -166,7 +229,10 @@ def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefi
         files = (
             zone.latest_per_partition(contract.id) if partitioned else [zone.latest(contract.id)]
         )
-        parts = [(landed, formats.read(zone.read(landed), contract)) for landed in files]
+        parts = [
+            (landed, formats.read(zone.read(landed), contract, landed.partition))
+            for landed in files
+        ]
         result = stage(contract, instrument.instrument_id, parts, store.path)
         check_results = run_contract_checks(contract, store.path, result.build_id)
         metadata = {
@@ -426,7 +492,14 @@ def _partitioned_schedule(contract: Contract) -> tuple[dg.UnresolvedAssetJobDefi
     )
     def _schedule(context: dg.ScheduleEvaluationContext) -> dg.RunRequest:
         when = context.scheduled_execution_time or datetime.now(UTC)
-        return dg.RunRequest(partition_key=report_year(when))
+        # Monthly sources refresh the month in progress; yearly ones the report year,
+        # which is not simply the calendar year around the new year (see report_year).
+        key = (
+            when.strftime("%Y-%m")
+            if isinstance(contract.source.partitions, MonthlyPartitions)
+            else report_year(when)
+        )
+        return dg.RunRequest(partition_key=key)
 
     return job, _schedule
 

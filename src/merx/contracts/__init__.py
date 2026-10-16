@@ -32,10 +32,18 @@ def validate_against_reference(contract: Contract, reference: Reference) -> None
     instrument = reference.instruments.get(contract.instrument)
     if instrument is None:
         raise ContractError(f"{contract.id}: unknown instrument {contract.instrument}")
-    if contract.unit != instrument.unit:
+    # The instrument names the unit of the thing being measured. A dataset that mixes
+    # units must still measure that thing in it somewhere: a GB power dataset carrying
+    # price in GBP/MWh and volume in MWh is consistent with the instrument; one carrying
+    # neither is a mistake worth failing on.
+    units = {contract.unit} if isinstance(contract.unit, str) else set(contract.unit.values())
+    if instrument.unit not in units:
         raise ContractError(
             f"{contract.id}: unit {contract.unit} disagrees with instrument unit {instrument.unit}"
         )
+    unknown = units - set(reference.units)
+    if unknown:
+        raise ContractError(f"{contract.id}: units not in reference: {sorted(unknown)}")
     key = (contract.source.provider, contract.source.series_key)
     entry = reference.crosswalk.get(key)
     if entry is None:

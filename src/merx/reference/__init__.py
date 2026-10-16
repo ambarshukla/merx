@@ -17,7 +17,11 @@ class Instrument:
     instrument_id: str
     name: str
     commodity: str
+    # The sector the client's menu groups by, and what sort of data this is
+    # (spot, fundamental, positioning, environmental, curve, index).
+    sector: str
     kind: str
+    data_type: str
     location: str
     unit: str
 

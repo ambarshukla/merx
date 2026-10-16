@@ -4,3 +4,8 @@ USD/MMBtu,US dollars per million British thermal units,price
 kbbl,thousand barrels,volume
 contracts,number of futures contracts,count
 Bcf,billion cubic feet,volume
+GBP/MWh,pounds sterling per megawatt hour,price
+MWh,megawatt hours,energy
+gCO2/kWh,grams of carbon dioxide per kilowatt hour,intensity
+USD/mt,US dollars per metric tonne,price
+USD/troy oz,US dollars per troy ounce (31.1 grams),price

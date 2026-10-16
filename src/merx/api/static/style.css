@@ -92,3 +92,47 @@ button { cursor: pointer; }
 .kpi .l { color: var(--muted); font-size: 12px; }
 .note { border-left: 3px solid var(--accent); padding: 6px 10px; background: var(--panel); }
 code { font-size: 12px; }
+
+/* --- sector navigation and the dataset catalogue ------------------------------- */
+.sectors { display: flex; flex-wrap: wrap; gap: 6px; }
+.sectors button {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  border-radius: 999px; padding: 5px 13px; cursor: pointer; font-size: 13px;
+}
+.sectors button:hover { border-color: var(--accent); }
+.sectors button.here { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sectors button .n { opacity: .65; margin-left: 5px; font-variant-numeric: tabular-nums; }
+
+.catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 8px; }
+.card {
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+  padding: 9px 11px; cursor: pointer; text-align: left; color: inherit; font: inherit;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.card:hover { border-color: var(--accent); }
+.card.here { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.card .name { font-weight: 600; line-height: 1.3; }
+.card .facts { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.tag {
+  font-size: 11px; border: 1px solid var(--line); border-radius: 4px;
+  padding: 1px 6px; color: var(--muted); white-space: nowrap;
+}
+
+/* --- the explain affordance ----------------------------------------------------- */
+.explained { position: relative; }
+.explain-mark {
+  border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+  border-radius: 999px; width: 16px; height: 16px; line-height: 1; padding: 0;
+  font-size: 11px; cursor: help; margin-left: 5px; vertical-align: middle;
+}
+.explain-mark:hover, .explain-mark:focus { border-color: var(--accent); color: var(--accent); }
+.explain-pop {
+  position: absolute; z-index: 40; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.18); font-size: 13px; line-height: 1.5;
+}
+.explain-pop p { margin: 6px 0 0; }
+.concept { border-top: 1px solid var(--line); padding: 7px 0; }
+.concept:first-child { border-top: 0; }
+.concept summary { cursor: pointer; }
+.concept p { margin: 7px 0 2px; color: var(--ink); }

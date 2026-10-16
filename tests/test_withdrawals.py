@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import dagster as dg
+import duckdb
 import pytest
 from conftest import core_assets, eia_workbook
 from test_pipeline import FileFetcher
@@ -107,3 +108,32 @@ def test_cli_lists_missing_values_and_accepts_them(tmp_path, monkeypatch, capsys
     cli.main(["exceptions"])
     out = capsys.readouterr().out
     assert "no_withdrawals" in out and "oil-data-steward" in out
+
+
+def test_an_older_acceptance_table_gains_the_period_column():
+    """Acceptances recorded before sub-daily data existed must survive the upgrade:
+    they are decisions a person made, and re-asking would be a bug, not a migration."""
+    con = duckdb.connect()
+    con.execute("CREATE SCHEMA IF NOT EXISTS ops")
+    con.execute(
+        """
+        CREATE TABLE ops.accepted_withdrawals (
+            dataset_id      VARCHAR   NOT NULL,
+            measure         VARCHAR   NOT NULL,
+            valid_date      DATE      NOT NULL,
+            reason          VARCHAR   NOT NULL,
+            accepted_at_utc TIMESTAMP NOT NULL
+        )
+        """
+    )
+    con.execute(
+        "INSERT INTO ops.accepted_withdrawals VALUES "
+        "('eia_wti_spot', 'price', '2020-04-20', 'source dropped it', '2026-10-16 10:00:00')"
+    )
+
+    withdrawals.ensure_table(con)
+
+    assert con.execute(
+        "SELECT measure, valid_date, period, reason FROM ops.accepted_withdrawals"
+    ).fetchall() == [("price", date(2020, 4, 20), 0, "source dropped it")]
+    con.close()

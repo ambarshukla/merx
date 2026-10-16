@@ -73,7 +73,7 @@ def test_as_known_at_rebuilds_the_dataset_at_any_moment(tmp_path):
     _, con = three_vintages(tmp_path)
 
     def at(t):
-        return [(d, v) for _, d, v in pit.as_known_at(con, STORAGE, naive(t))]
+        return [(d, v) for _, d, _, v in pit.as_known_at(con, STORAGE, naive(t))]
 
     assert at(datetime(2024, 10, 1, tzinfo=UTC)) == []  # before anything was known
     assert at(datetime(2024, 10, 5, tzinfo=UTC)) == [(D1, 3492.0), (D2, 3547.0)]
@@ -83,7 +83,8 @@ def test_as_known_at_rebuilds_the_dataset_at_any_moment(tmp_path):
 
 def test_revisions_lists_changed_values(tmp_path):
     _, con = three_vintages(tmp_path)
-    assert pit.revisions(con, STORAGE) == [("working_gas", D2, 3547.0, 3548.0, 2, naive(T2))]
+    # Daily data sits in period 0, "the whole day".
+    assert pit.revisions(con, STORAGE) == [("working_gas", D2, 0, 3547.0, 3548.0, 2, naive(T2))]
 
 
 def test_a_gap_filled_later_is_a_revision(tmp_path):
@@ -93,7 +94,7 @@ def test_a_gap_filled_later_is_a_revision(tmp_path):
     con = connect(tmp_path)
     summary = pit.build(con, STORAGE, zone)
     assert summary["revised_values"] == 1
-    assert pit.revisions(con, STORAGE)[0][2:4] == (None, 3547.0)
+    assert pit.revisions(con, STORAGE)[0][3:5] == (None, 3547.0)
 
 
 def test_identical_downloads_add_no_versions(tmp_path):
@@ -152,10 +153,10 @@ def test_archive_import_backfills_history_and_never_feeds_staging(tmp_path):
     con = connect(tmp_path / "data")
     try:
         assert pit.revisions(con, STORAGE) == [
-            ("working_gas", date(2017, 6, 30), 2888.0, 2878.0, 2, naive(later.captured_at_utc))
+            ("working_gas", date(2017, 6, 30), 0, 2888.0, 2878.0, 2, naive(later.captured_at_utc))
         ]
         known_2018 = pit.as_known_at(con, STORAGE, datetime(2018, 1, 1))
-        assert known_2018 == [("working_gas", date(2017, 6, 30), 2888.0)]
+        assert known_2018 == [("working_gas", date(2017, 6, 30), 0, 2888.0)]
     finally:
         con.close()
 

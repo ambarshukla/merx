@@ -27,7 +27,8 @@ STATIC = Path(__file__).parent / "static"
 
 def create_app(data_dir: Path | None = None) -> FastAPI:
     store = data.Store(data_dir or default_data_dir())
-    contracts = load_contracts(load_reference())
+    reference = load_reference()
+    contracts = load_contracts(reference)
     by_id = {c.id: c for c in contracts}
     app = FastAPI(title="merx", docs_url="/api/docs", openapi_url="/api/openapi.json")
 
@@ -92,7 +93,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     # --- client: published data only ----------------------------------------------
     @app.get("/api/client/datasets")
     def client_datasets():
-        return data.published_catalog(store, contracts)
+        return data.published_catalog(store, contracts, reference)
 
     @app.get("/api/client/series/{dataset}")
     def client_series(
@@ -106,7 +107,8 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         return {
             "dataset": c.id,
             "measure": m,
-            "unit": c.unit,
+            # A dataset may carry a unit per measure, so give the one being asked for.
+            "unit": c.unit_for(m),
             "points": data.published_series(store, c, m, start, end),
         }
 

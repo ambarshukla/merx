@@ -21,17 +21,20 @@ uses them.
 | **Carried-forward value** | A value repeated from the previous date to fill a day with no real observation, such as a market holiday. |
 | **CFTC (Commodity Futures Trading Commission)** | The US regulator of futures markets. Publishes weekly reports of who holds futures positions. |
 | **COT (Commitments of Traders)** | The CFTC's weekly report of futures positions by type of trader, as of Tuesday and published the following Friday. |
+| **Carbon intensity** | How much carbon dioxide came with each unit of electricity, in grams of CO2 per kilowatt hour. It rises and falls through the day with the generation mix. |
 | **Channel** | One way a source delivers the same data, such as a spreadsheet download or an API. Two channels can disagree. |
 | **Client view** | The view for people using the data (`/client`): published series only, with quality status, history and revisions. |
 | **Contango** | A forward curve where later delivery costs more than nearer delivery, usually a sign of ample supply and storage. |
 | **Contract 1 (front month)** | The futures contract nearest to expiry. "Contract 1" is a series that rolls to the next contract as each one expires. |
 | **Crosswalk** | A table that maps each provider's identifier for something onto our own identifier, so data is joined on codes, not on names that can change. |
+| **Clock change** | The two days a year local clocks shift. In Great Britain the electricity day then has 46 or 50 half-hourly settlement periods instead of 48. |
 | **Dagster** | An open-source orchestrator: it runs pipeline steps in order, on schedules, and records every run and check. |
 | **Data contract** | A declarative description of a dataset: source, schema, units, calendar, tier, release schedule, owner and rules. |
 | **Deploy key** | A key that grants a machine, rather than a person, access to one system for one purpose. Here it can start a deploy and nothing else. |
 | **DuckDB** | An analytical SQL database that runs inside the program using it and stores everything in one file. Allows one writing process per file. |
 | **EIA (U.S. Energy Information Administration)** | The statistics agency of the US Department of Energy. Publishes energy prices, stocks and production data. |
 | **Exception** | A failing check turned into a work item: owner, when it opened and closed, how often it was seen, and its root cause. |
+| **Forecast error** | How far a prediction turned out to be from what happened. The mean error shows whether a forecast leans high or low; the mean absolute error shows how far off it typically is either way. |
 | **FOB (free on board)** | A price for a cargo at the point of loading, before shipping costs. |
 | **Freshness check** | Fails when the newest value in a dataset is older than a stated number of days. Looks at the data, not at the file's date. |
 | **Forced command** | A restriction on a key: the server runs one fixed program whatever the connecting client asks for, so the key cannot be used for anything else. |
@@ -71,12 +74,17 @@ uses them.
 | **Settlement price** | The exchange's official end-of-day price, used for margining. Distinct from the last traded price. |
 | **SHA-256** | A fingerprint of a file's bytes. Identical files share it; any change gives a different one. |
 | **Smoke test** | A quick check after a change that the thing still works at all — here, that the live site answers — before trusting anything finer. |
+| **Settlement period** | The unit of time a power market settles in. Great Britain uses half an hour, numbered 1 upward within each day, which is why the day, not the clock, defines the key. |
+| **Sector** | The group a dataset belongs to for browsing: oil, gas, power, carbon, metals or agriculture. |
+| **Pink Sheet** | The World Bank's monthly table of benchmark prices for about seventy commodities, published free under CC BY 4.0. |
+| **Settlement day** | The day a power market settles, which begins at local midnight — 23:00 UTC in British Summer Time, so a GB settlement day can start the evening before in UTC. |
 | **Spot price** | The price for a commodity delivered now (within days), as opposed to a futures price for later delivery. |
 | **SPR (Strategic Petroleum Reserve)** | The US government's emergency crude oil stockpile, reported separately from commercial stocks. |
 | **Spread position** | Holding both a long and a short futures position (e.g. in different months). Counted on both sides of open interest. |
 | **Staged table** | The typed, checked version of one dataset (`staged.<id>` in DuckDB), with each row linked to the raw file it came from. |
 | **Stale run (stuck feed)** | The same value repeated where it should have changed, usually because a feed stopped updating. |
 | **Swap dealer** | In the COT report, banks and dealers that use futures to hedge swaps they have written for clients. |
+| **System price / market index price** | Two different GB electricity prices. The market index price is the day-ahead reference the exchanges report; the system price is what imbalances settle at afterwards. merx publishes the former. |
 | **Tier** | How critical a dataset is. Tier 1 gets blocking checks and immediate alerts; lower tiers get warnings and next-day review. |
 | **Time to recover** | How long an exception stayed open, from the first failing check to the first passing one. |
 | **Valid date** | The date a value describes, as opposed to when it became known (knowledge time). |

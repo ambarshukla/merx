@@ -45,7 +45,9 @@ function lineChart(container, series, { unit = "", marks = [] } = {}) {
 
   const parsed = series.map((s) => ({
     ...s,
-    pts: s.points.map(([d, v]) => [Date.parse(d + "T00:00:00Z"), v]),
+    // A point is dated either by day ("2026-10-15") or, for data arriving more
+    // than once a day, by its period's start ("2026-10-15T13:30").
+    pts: s.points.map(([d, v]) => [Date.parse(d.length > 10 ? d + "Z" : d + "T00:00:00Z"), v]),
   }));
   const all = parsed.flatMap((s) => s.pts);
   const vals = all.map((p) => p[1]).filter((v) => v !== null);
@@ -71,6 +73,8 @@ function lineChart(container, series, { unit = "", marks = [] } = {}) {
     el("line", { x1: m.l, x2: W - m.r, y1: Y(0), y2: Y(0), stroke: "currentColor",
       "stroke-opacity": 0.35 }, svg);
   }
+  // Over a short window, yearly gridlines say nothing useful.
+  const spanDays = (x1 - x0) / 864e5;
   const yearSpan = (x1 - x0) / (365.25 * 864e5);
   const yearStep = niceTicks(0, yearSpan, 8)[1] || 1;
   const firstYear = new Date(x0).getUTCFullYear();
@@ -132,7 +136,11 @@ function lineChart(container, series, { unit = "", marks = [] } = {}) {
     }
     cursor.setAttribute("x1", X(shown)); cursor.setAttribute("x2", X(shown));
     cursor.setAttribute("visibility", "visible");
-    tip.innerHTML = `<div>${new Date(shown).toISOString().slice(0, 10)}</div>` + lines.join("<br>");
+    const when = new Date(shown).toISOString();
+    const stamp = spanDays <= 120 && when.slice(11, 16) !== "00:00"
+      ? when.slice(0, 16).replace("T", " ") + " UTC"
+      : when.slice(0, 10);
+    tip.innerHTML = `<div>${stamp}</div>` + lines.join("<br>");
     tip.style.display = "block";
     const left = (X(shown) / W) * r.width;
     tip.style.left = Math.min(left + 12, r.width - tip.offsetWidth - 4) + "px";

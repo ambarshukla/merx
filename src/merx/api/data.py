@@ -14,6 +14,7 @@ from pathlib import Path
 import duckdb
 
 from merx.contracts import Contract, check_name
+from merx.reference import Reference
 from merx.store import DB_FILE
 
 _RETRIES = 10
@@ -196,16 +197,16 @@ def missing(store: Store, contract: Contract) -> dict:
         return {"missing": 0, "accepted": 0, "examples": []}
     accepted_join = (
         "LEFT JOIN ops.accepted_withdrawals a ON a.dataset_id = ? "
-        "AND a.measure = k.measure AND a.valid_date = k.valid_date"
+        "AND a.measure = k.measure AND a.valid_date = k.valid_date AND a.period = k.period"
         if store.has("ops", "accepted_withdrawals")
         else ""
     )
     accepted_col = "a.dataset_id IS NOT NULL" if accepted_join else "false"
     rows = store.query(
         f"""
-        WITH k AS (SELECT DISTINCT measure, valid_date FROM pit."{contract.id}")
+        WITH k AS (SELECT DISTINCT measure, valid_date, period FROM pit."{contract.id}")
         SELECT k.measure, k.valid_date, {accepted_col}
-        FROM k ANTI JOIN staged."{contract.id}" s USING (measure, valid_date)
+        FROM k ANTI JOIN staged."{contract.id}" s USING (measure, valid_date, period)
         {accepted_join}
         ORDER BY k.valid_date DESC
         """,
@@ -240,8 +241,11 @@ def lab_headline(store: Store) -> list[dict]:
 # --- client (published data only) -------------------------------------------------------
 
 
-def published_catalog(store: Store, contracts: list[Contract]) -> list[dict]:
+def published_catalog(
+    store: Store, contracts: list[Contract], reference: Reference | None = None
+) -> list[dict]:
     tables = store.tables()
+    instruments = reference.instruments if reference else {}
     attempts = {}
     if ("meta", "publications") in tables:
         attempts = {
@@ -269,13 +273,21 @@ def published_catalog(store: Store, contracts: list[Contract]) -> list[dict]:
                 f'SELECT count(DISTINCT (measure, valid_date)) FROM pit."{c.id}" '
                 "WHERE ended_by IS NOT NULL"
             )[0]
+        instrument = instruments.get(c.instrument)
         out.append(
             {
                 "id": c.id,
                 "title": c.title,
                 "domain": c.domain,
+                # The sector and the sort of data this is, for the catalogue's menu.
+                "sector": instrument.sector if instrument else c.domain,
+                "data_type": instrument.data_type if instrument else "spot",
+                "instrument": c.instrument,
+                "instrument_name": instrument.name if instrument else c.instrument,
                 "unit": c.unit,
+                "units": {m: c.unit_for(m) for m in measures},
                 "frequency": c.frequency,
+                "sub_daily": c.sub_daily,
                 "measures": measures,
                 "quality_status": status,
                 "published_at_utc": _iso(published_at),
@@ -294,24 +306,31 @@ def published_catalog(store: Store, contracts: list[Contract]) -> list[dict]:
 def published_series(
     store: Store, contract: Contract, measure: str, start: date | None, end: date | None
 ) -> list[list]:
+    # Below a day there are many values per date, so the x axis is the period's start
+    # time; at a day or coarser it stays a plain date.
+    x = "strftime(valid_time_utc, '%Y-%m-%dT%H:%M')" if contract.sub_daily else "valid_date"
     rows = store.query(
-        f'SELECT valid_date, value FROM published."{contract.id}" '
-        "WHERE measure = ? AND valid_date BETWEEN ? AND ? ORDER BY valid_date",
+        f'SELECT {x}, value FROM published."{contract.id}" '
+        "WHERE measure = ? AND valid_date BETWEEN ? AND ? ORDER BY valid_date, period",
         [measure, start or date(1900, 1, 1), end or date(2999, 12, 31)],
     )
-    return [[d.isoformat(), v] for d, v in rows]
+    # Sub-daily x values arrive from the query as text already; dates do not.
+    return [[d if isinstance(d, str) else d.isoformat(), v] for d, v in rows]
 
 
 def series_as_known_at(store: Store, contract: Contract, measure: str, at: datetime) -> list[list]:
     if not store.has("pit", contract.id):
         return []
+    # The history keeps every period, so a sub-daily series is ordered by both and
+    # dated by its period's start, exactly as the published series is.
+    x = "strftime(valid_time_utc, '%Y-%m-%dT%H:%M')" if contract.sub_daily else "valid_date"
     rows = store.query(
-        f'SELECT valid_date, value FROM pit."{contract.id}" '
+        f'SELECT {x}, value FROM pit."{contract.id}" '
         "WHERE measure = ? AND known_from_utc <= ? "
-        "AND (known_to_utc IS NULL OR known_to_utc > ?) ORDER BY valid_date",
+        "AND (known_to_utc IS NULL OR known_to_utc > ?) ORDER BY valid_date, period",
         [measure, at, at],
     )
-    return [[d.isoformat(), v] for d, v in rows]
+    return [[d if isinstance(d, str) else d.isoformat(), v] for d, v in rows]
 
 
 def revisions(store: Store, contract: Contract, measure: str, limit: int = 200) -> list[dict]:

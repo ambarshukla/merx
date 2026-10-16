@@ -11,6 +11,9 @@ dependencies = [
     "pyarrow>=26",
     "pydantic>=2.14",
     "pyyaml>=6",
+    # Two spreadsheet readers, because the sources use both formats: xlrd for EIA's
+    # legacy .xls, openpyxl for the World Bank's .xlsx.
+    "openpyxl>=3.1",
     "xlrd>=2.0",
     "fastapi>=0.143",
     "uvicorn>=0.54",

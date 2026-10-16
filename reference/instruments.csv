@@ -1,9 +1,19 @@
-instrument_id,name,commodity,kind,location,unit
-WTI_CUSHING_SPOT,WTI crude oil spot price (FOB Cushing),crude_oil,spot,Cushing Oklahoma US,USD/bbl
-BRENT_SPOT,Brent crude oil spot price (FOB Europe),crude_oil,spot,North Sea,USD/bbl
-HENRY_HUB_SPOT,Henry Hub natural gas spot price,natural_gas,spot,Erath Louisiana US,USD/MMBtu
-WTI_NYMEX_C1,WTI crude oil futures nearest contract (NYMEX contract 1),crude_oil,future_generic,Cushing Oklahoma US,USD/bbl
-US_CRUDE_STOCKS_EX_SPR,US ending stocks of crude oil excluding the Strategic Petroleum Reserve,crude_oil,inventory,United States,kbbl
-WTI_NYMEX_FUTURES,WTI crude oil futures market (NYMEX) as reported for positioning,crude_oil,futures_market,Cushing Oklahoma US,contracts
-US_L48_GAS_STORAGE,US Lower 48 natural gas working gas in underground storage,natural_gas,inventory,Lower 48 States US,Bcf
-HENRY_HUB_NYMEX_FUTURES,Henry Hub natural gas futures market (NYMEX) as reported for positioning,natural_gas,futures_market,Erath Louisiana US,contracts
+instrument_id,name,commodity,sector,kind,data_type,location,unit
+WTI_CUSHING_SPOT,WTI crude oil spot price (FOB Cushing),crude_oil,oil,spot,spot,Cushing Oklahoma US,USD/bbl
+BRENT_SPOT,Brent crude oil spot price (FOB Europe),crude_oil,oil,spot,spot,North Sea,USD/bbl
+HENRY_HUB_SPOT,Henry Hub natural gas spot price,natural_gas,gas,spot,spot,Erath Louisiana US,USD/MMBtu
+WTI_NYMEX_C1,WTI crude oil futures nearest contract (NYMEX contract 1),crude_oil,oil,future_generic,curve,Cushing Oklahoma US,USD/bbl
+US_CRUDE_STOCKS_EX_SPR,US ending stocks of crude oil excluding the Strategic Petroleum Reserve,crude_oil,oil,inventory,fundamental,United States,kbbl
+WTI_NYMEX_FUTURES,WTI crude oil futures market (NYMEX) as reported for positioning,crude_oil,oil,futures_market,positioning,Cushing Oklahoma US,contracts
+US_L48_GAS_STORAGE,US Lower 48 natural gas working gas in underground storage,natural_gas,gas,inventory,fundamental,Lower 48 States US,Bcf
+HENRY_HUB_NYMEX_FUTURES,Henry Hub natural gas futures market (NYMEX) as reported for positioning,natural_gas,gas,futures_market,positioning,Erath Louisiana US,contracts
+GB_DAY_AHEAD_POWER,GB day-ahead electricity market index price (half-hourly),electricity,power,spot,spot,Great Britain,GBP/MWh
+GB_GRID_CARBON_INTENSITY,Great Britain grid carbon intensity (half-hourly),grid_emissions,carbon,intensity,environmental,Great Britain,gCO2/kWh
+COPPER_GLOBAL_MONTHLY,"Copper price, monthly (World Bank monthly benchmark)",copper,metals,benchmark,spot,global,USD/mt
+ALUMINIUM_GLOBAL_MONTHLY,"Aluminium price, monthly (World Bank monthly benchmark)",aluminium,metals,benchmark,spot,global,USD/mt
+GOLD_GLOBAL_MONTHLY,"Gold price, monthly (World Bank monthly benchmark)",gold,metals,benchmark,spot,global,USD/troy oz
+WHEAT_HRW_MONTHLY,"Wheat price (US hard red winter), monthly (World Bank monthly benchmark)",wheat,ags,benchmark,spot,global,USD/mt
+MAIZE_MONTHLY,"Maize price, monthly (World Bank monthly benchmark)",maize,ags,benchmark,spot,global,USD/mt
+SOYBEANS_MONTHLY,"Soybean price, monthly (World Bank monthly benchmark)",soybeans,ags,benchmark,spot,global,USD/mt
+WTI_MONTHLY_AVG,"WTI crude oil price, monthly average (World Bank monthly benchmark)",crude_oil,oil,benchmark,spot,global,USD/bbl
+BRENT_MONTHLY_AVG,"Brent crude oil price, monthly average (World Bank monthly benchmark)",crude_oil,oil,benchmark,spot,global,USD/bbl
