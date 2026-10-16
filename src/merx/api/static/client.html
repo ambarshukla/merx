@@ -271,7 +271,7 @@ async function draw() {
     (current.sub_daily ? `, one per <span data-explain="settlement-period">settlement period</span>` : "") +
     (negatives ? ` · <b>${negatives}</b> below zero, which is real here, not an error` : "");
   // The note is rebuilt, so its ? marks have to be re-attached.
-  if (window.explainAgain) window.explainAgain();
+  explainAgain();
 
   const rev = await getJSON(`/api/client/series/${current.id}/revisions?measure=${measure}`);
   document.getElementById("revisions").innerHTML = rev.length ? `
