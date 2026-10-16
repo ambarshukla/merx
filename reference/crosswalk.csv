@@ -17,3 +17,11 @@ worldbank,"Maize",MAIZE_MONTHLY,"Maize","Pink Sheet column name; the file spells
 worldbank,"Soybeans",SOYBEANS_MONTHLY,"Soybeans","Pink Sheet column name; the file spells some commodities its own way"
 worldbank,"Crude oil, WTI",WTI_MONTHLY_AVG,"Crude oil, WTI","Pink Sheet column name; the file spells some commodities its own way"
 worldbank,"Crude oil, Brent",BRENT_MONTHLY_AVG,"Crude oil, Brent","Pink Sheet column name; the file spells some commodities its own way"
+cftc,002602,CORN_CBOT_FUTURES,CORN - CHICAGO BOARD OF TRADE,Market code verified against the 2026 disaggregated file on 2026-10-16
+cftc,005602,SOYBEANS_CBOT_FUTURES,SOYBEANS - CHICAGO BOARD OF TRADE,Market code verified against the 2026 disaggregated file on 2026-10-16
+cftc,001602,WHEAT_SRW_CBOT_FUTURES,WHEAT-SRW - CHICAGO BOARD OF TRADE,Market code verified against the 2026 disaggregated file on 2026-10-16
+cftc,088691,GOLD_COMEX_FUTURES,GOLD - COMMODITY EXCHANGE INC.,Market code verified against the 2026 disaggregated file on 2026-10-16
+cftc,084691,SILVER_COMEX_FUTURES,SILVER - COMMODITY EXCHANGE INC.,Market code verified against the 2026 disaggregated file on 2026-10-16
+cftc,085692,COPPER_COMEX_FUTURES,COPPER- #1 - COMMODITY EXCHANGE INC.,Market code verified against the 2026 disaggregated file on 2026-10-16
+cftc,111659,RBOB_NYMEX_FUTURES,GASOLINE RBOB - NEW YORK MERCANTILE EXCHANGE,Market code verified against the 2026 disaggregated file on 2026-10-16
+cftc,022651,ULSD_NYMEX_FUTURES,NY HARBOR ULSD - NEW YORK MERCANTILE EXCHANGE,Market code verified against the 2026 disaggregated file on 2026-10-16

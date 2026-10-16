@@ -507,3 +507,26 @@ as the API changing shape. It now distinguishes the two — a key missing from *
 hour is a gap and becomes a null, while a key missing from *every* half hour is still a
 format error, because publishing a column of nulls would make an empty series look like
 a present one.
+
+## 2026-10-16: eight more positioning datasets, and no new code
+
+**Built.** CFTC Commitments of Traders for corn, soybeans, wheat, gold, silver, copper,
+RBOB gasoline and ULSD — eight contracts, using the parser, the checks and the
+accounting identity the WTI and Henry Hub datasets already had. **No Python was
+written.** Each market code was verified against the real 2026 file before the contracts
+existed; all eight predictions were right.
+
+**Checked.** Corn, gold and copper were run end to end against the live source: all
+seven checks pass on each, including the balance identity — open interest equals every
+long position plus spreads, and equally every short position plus spreads. Peak open
+interest in 2026: corn 1,958,771 contracts, gold 528,004, copper 313,832.
+
+**What this is for.** merx now holds 29 datasets, and metals and agriculture have both a
+price and a positioning series rather than a price alone. The point of the exercise is
+the cost: a sector gained a second kind of data for the price of a configuration file,
+which is the claim the whole contract design exists to make.
+
+**Said plainly, because it matters:** there is no plain ICE Brent market in this file.
+What carries the name is `06765T` BRENT LAST DAY on NYMEX — a cash-settled look-alike —
+and four spread contracts. Brent positioning is therefore absent rather than
+approximated, and PROVENANCE says so.
