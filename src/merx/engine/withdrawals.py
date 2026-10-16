@@ -41,6 +41,17 @@ def ensure_table(con: duckdb.DuckDBPyConnection) -> None:
         con.execute("ALTER TABLE ops.accepted_withdrawals ADD COLUMN period INTEGER DEFAULT 0")
 
 
+def _columns(con: duckdb.DuckDBPyConnection, schema: str, table: str) -> set[str]:
+    return {
+        name
+        for (name,) in con.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = ? AND table_name = ?",
+            [schema, table],
+        ).fetchall()
+    }
+
+
 def _has_history(con: duckdb.DuckDBPyConnection, dataset_id: str) -> bool:
     (n,) = con.execute(
         "SELECT count(*) FROM information_schema.tables "
@@ -59,22 +70,33 @@ def missing(
     if not _has_history(con, dataset_id):
         return None
     ensure_table(con)
+    # The history is rebuilt *after* staging, so on the first build following a change
+    # to the key the staged table already carries `period` and the history does not.
+    # Comparing on the columns both sides have keeps the answer right either way: for
+    # daily data period is always 0, so leaving it out of the key changes nothing, and
+    # the history catches up later in the same run.
+    shared = _columns(con, "pit", dataset_id) & _columns(con, "staged", dataset_id)
+    by_period = "period" in shared
+    keys = "measure, valid_date" + (", period" if by_period else "")
+    period = "k.period" if by_period else "0 AS period"
+    accepted_on = "a.measure = k.measure AND a.valid_date = k.valid_date" + (
+        " AND a.period = k.period" if by_period else ""
+    )
     return con.execute(
         f"""
         WITH known AS (
-            SELECT measure, valid_date, period,
+            SELECT {keys},
                    last(value ORDER BY known_from_utc) AS last_value,
                    max(coalesce(known_to_utc, known_from_utc)) AS last_seen_utc
             FROM pit."{dataset_id}"
-            GROUP BY measure, valid_date, period
+            GROUP BY {keys}
         )
-        SELECT k.measure, k.valid_date, k.period, k.last_value, k.last_seen_utc,
+        SELECT k.measure, k.valid_date, {period}, k.last_value, k.last_seen_utc,
                a.dataset_id IS NOT NULL AS accepted
         FROM known k
-        ANTI JOIN {staged_table} s USING (measure, valid_date, period)
+        ANTI JOIN {staged_table} s USING ({keys})
         LEFT JOIN ops.accepted_withdrawals a
-               ON a.dataset_id = ? AND a.measure = k.measure
-              AND a.valid_date = k.valid_date AND a.period = k.period
+               ON a.dataset_id = ? AND {accepted_on}
         ORDER BY k.valid_date, k.measure
         """,
         [dataset_id],
