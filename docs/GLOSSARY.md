@@ -5,6 +5,7 @@ uses them.
 
 | Term | Meaning |
 |---|---|
+| **Anomaly check** | A check that runs one of the lab's recommended detectors and warns when it flags any of the newest values. |
 | **As known at** | A dataset rebuilt exactly as it stood at a past moment, using only the versions known then. |
 | **Accepted withdrawal** | A value known before and missing now whose removal a person has signed off, with a reason. It no longer fails the withdrawal check. |
 | **Asset (Dagster)** | A dataset that Dagster knows how to build and tracks: here, a raw file (`raw/<id>`) or a staged table (`staged/<id>`). |

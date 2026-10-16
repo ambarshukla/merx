@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import duckdb
 import pytest
@@ -104,3 +104,34 @@ def test_freshness_fails_on_empty_table():
     con = duckdb.connect()
     con.execute("CREATE TABLE t (measure VARCHAR, valid_date DATE, value DOUBLE)")
     assert not run_check(con, "t", FreshnessCheck(type="freshness", max_age_days=5), TODAY).passed
+
+
+def _walk(n: int, seed: int = 3):
+    import random
+
+    rng = random.Random(seed)
+    start, x, out = date(2010, 1, 4), 60.0, []
+    for i in range(n):
+        x += rng.gauss(0, 0.5)
+        out.append((start + timedelta(days=i), x))
+    return out
+
+
+def test_anomaly_flags_a_recent_spike_but_not_an_old_one():
+    from merx.contracts.model import AnomalyCheck
+
+    points = _walk(1500)
+    con = duckdb.connect()
+    con.execute("CREATE TABLE t (measure VARCHAR, valid_date DATE, value DOUBLE)")
+    rows = [("price", d, v) for d, v in points]
+    old_spike, new_spike = 600, 1495
+    rows[old_spike] = ("price", rows[old_spike][1], rows[old_spike][2] * 10)
+    con.executemany("INSERT INTO t VALUES (?, ?, ?)", rows)
+    check = AnomalyCheck(type="anomaly", detector="robust_suite", lookback=20)
+    clean = run_check(con, "t", check, TODAY, frequency="daily")
+    assert clean.passed  # the old spike is outside the newest 20 values
+    assert clean.metadata["flags_in_full_history"] >= 1
+    con.execute("UPDATE t SET value = value * 10 WHERE valid_date = ?", [rows[new_spike][1]])
+    flagged = run_check(con, "t", check, TODAY, frequency="daily")
+    assert not flagged.passed
+    assert flagged.metadata["examples"][0][1] == rows[new_spike][1].isoformat()

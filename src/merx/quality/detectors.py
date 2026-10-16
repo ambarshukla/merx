@@ -251,3 +251,13 @@ class Suite:
 
 
 Detector = StaticBand | RobustZ | Seasonal | RepeatRun | Suite
+
+
+# The detector settings the lab recommends for production use (docs/DQ_LAB.md), by name,
+# so a contract can choose one.
+_V2 = {"recover": True, "ignore_zero_changes": True}
+NAMED: dict[str, Detector] = {
+    "seasonal_suite": Suite((Seasonal(k=5.0, **_V2), RepeatRun())),
+    "robust_suite": Suite((RobustZ(k=5.0, **_V2), RepeatRun())),
+    "static_band": StaticBand(threshold=0.20),
+}

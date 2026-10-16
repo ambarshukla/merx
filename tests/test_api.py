@@ -53,7 +53,7 @@ def test_ops_lists_every_contract_with_its_status(client):
 
 def test_ops_dataset_detail_shows_every_check(client):
     detail = client.get("/api/ops/datasets/eia_wti_spot").json()
-    assert [c["check"] for c in detail["checks"]][-1] == "no_withdrawals"
+    assert {"no_withdrawals", "anomaly_seasonal_suite"} <= {c["check"] for c in detail["checks"]}
     assert all(c["passed"] for c in detail["checks"])
     assert detail["missing"]["missing"] == 0
     assert client.get("/api/ops/datasets/nope").status_code == 404

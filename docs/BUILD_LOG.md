@@ -323,3 +323,18 @@ are non-trading days: six Sundays removed in a copy of 2025-02-03 (2020-03-01 to
 look like the source cleaning up, unlike the bulk losses of 2026. The check flags both
 kinds the same way, which is why accepting a withdrawal is a person's decision with a
 reason, not an automatic rule.
+
+## 2026-10-16: the lab's detectors in production
+
+**Built.** The `anomaly` check (D-014) and named detector settings; every EIA contract now
+names its detector (seasonal suite, or robust suite for Henry Hub). 120 tests.
+
+**First run** (prediction: no recent flags on most series, one or two on Henry Hub).
+Henry Hub: none, both channels. Crude stocks, gas storage, futures: none. Oil: one recent
+flag each, identical in both channels: **Brent 2026-10-02 (135.51, up 18% from 114.82; the
+level stayed near 125-130 afterwards)** and **WTI 2026-09-28 (99.37, a rebound from 85.23
+on 2026-09-25)**. Both channels carry the same values, so these look like market moves,
+not data errors. For WTI the detector flagged the rebound rather than the dip before it:
+the dip was not extreme against a volatile window, the rebound from an accepted low was. A
+flag points a person *near* something worth a look; it does not say which value is wrong.
+Prediction partly held (most series clean), partly not (oil flagged, gas not).

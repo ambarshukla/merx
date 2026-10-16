@@ -311,3 +311,25 @@ API is useful on its own and easy to test).
 **Consequences.** The consoles run anywhere Python runs, from `merx serve`. If they grow
 past a few pages, a component framework becomes worth its build step; the JSON API would
 not change.
+
+## D-014: The lab's recommended detectors run in production as warning-level checks (2026-10-16)
+
+**Context.** The bake-off (D-007, `docs/DQ_LAB.md`) scored detectors on seeded defects
+and found the best choice depends on the series: the seasonal suite for most, the robust
+suite catches more on volatile gas prices. A score in a report protects nothing until the
+detector runs on every build.
+
+**Decision.** An `anomaly` check type runs a named detector (`seasonal_suite`,
+`robust_suite` or `static_band`, defined once in `merx.quality.detectors.NAMED` with the
+lab's settings) over each measure and fails if it flags any of the newest `lookback`
+values (20 by default). Each EIA contract names its detector, following the lab. The check
+is warning-level by default: at about 87% precision, roughly one flag in eight is a false
+alarm, too many to block publication on.
+
+**Alternatives considered.** Blocking on anomalies (the lab's own numbers say this would
+hold back good data); flagging the whole history on every run (the lab already does that;
+an operations check is about what just arrived).
+
+**Consequences.** New extreme values reach a person as a warning, an exception with an
+owner. The positioning datasets have no anomaly check yet: the lab has not scored
+detectors on them.
