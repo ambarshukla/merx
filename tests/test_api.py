@@ -1,6 +1,6 @@
 """The consoles' API: ops sees everything; the client sees only published data."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import dagster as dg
@@ -142,3 +142,98 @@ def test_a_daily_series_published_before_period_existed_still_reads(tmp_path):
     store = data.Store(tmp_path)
     points = data.published_series(store, contract, "price", None, None)
     assert points == [["2026-10-13", 100.0], ["2026-10-14", 101.0]]
+
+
+def old_shape_database(tmp_path):
+    """A database as an earlier version of the engine left it: no period anywhere, and
+    no valid_time_utc. The website opens the database read-only, so it cannot migrate
+    its way out of this — it has to read what is there."""
+    import duckdb
+
+    from merx.store import DB_FILE
+
+    con = duckdb.connect(str(tmp_path / DB_FILE))
+    con.execute("CREATE SCHEMA staged; CREATE SCHEMA pit; CREATE SCHEMA ops")
+    con.execute(
+        'CREATE TABLE staged."eia_wti_spot" (measure VARCHAR, valid_date DATE, value DOUBLE)'
+    )
+    con.execute("INSERT INTO staged.\"eia_wti_spot\" VALUES ('price', '2026-10-14', 101.0)")
+    con.execute(
+        'CREATE TABLE pit."eia_wti_spot" (measure VARCHAR, valid_date DATE, value DOUBLE, '
+        "known_from_utc TIMESTAMP, known_to_utc TIMESTAMP, ended_by VARCHAR)"
+    )
+    con.execute(
+        'INSERT INTO pit."eia_wti_spot" VALUES '
+        "('price', '2026-10-13', 100.0, '2026-10-13 10:00:00', NULL, NULL), "
+        "('price', '2026-10-14', 101.0, '2026-10-14 10:00:00', NULL, NULL)"
+    )
+    con.execute(
+        "CREATE TABLE ops.accepted_withdrawals (dataset_id VARCHAR, measure VARCHAR, "
+        "valid_date DATE, reason VARCHAR, accepted_at_utc TIMESTAMP)"
+    )
+    con.close()
+
+
+def wti_contract():
+    from merx.config import CONTRACTS_DIR
+    from merx.contracts import load_contract
+
+    return load_contract(CONTRACTS_DIR / "eia_wti_spot.yaml")
+
+
+def test_missing_reads_a_history_written_before_period_existed(tmp_path):
+    """This returned 500 on the live site for every dataset, taking the whole operations
+    detail panel with it."""
+    from merx.api import data
+
+    old_shape_database(tmp_path)
+    result = data.missing(data.Store(tmp_path), wti_contract())
+    # 2026-10-13 is in the history and not in the staged build: one missing value.
+    assert result["missing"] == 1
+    assert result["accepted"] == 0
+    assert result["examples"][0][:2] == ["price", "2026-10-13"]
+
+
+def test_as_known_at_reads_a_history_without_period_or_time(tmp_path):
+    from datetime import datetime
+
+    from merx.api import data
+
+    old_shape_database(tmp_path)
+    points = data.series_as_known_at(
+        data.Store(tmp_path), wti_contract(), "price", datetime(2026, 10, 15)
+    )
+    assert points == [["2026-10-13", 100.0], ["2026-10-14", 101.0]]
+
+
+def test_a_sub_daily_history_is_dated_by_the_period_start(tmp_path):
+    """Half-hourly data needs a time on the x axis: 48 points a day all dated with the
+    same date would draw as a vertical line. The history stores the period's start for
+    exactly this."""
+    import duckdb
+
+    from merx.api import data
+    from merx.config import CONTRACTS_DIR
+    from merx.contracts import load_contract
+    from merx.store import DB_FILE
+
+    con = duckdb.connect(str(tmp_path / DB_FILE))
+    con.execute("CREATE SCHEMA pit")
+    con.execute(
+        'CREATE TABLE pit."elexon_gb_power_price" (measure VARCHAR, valid_date DATE, '
+        "period INTEGER, valid_time_utc TIMESTAMP, value DOUBLE, "
+        "known_from_utc TIMESTAMP, known_to_utc TIMESTAMP)"
+    )
+    con.execute(
+        'INSERT INTO pit."elexon_gb_power_price" VALUES '
+        "('price', '2026-10-15', 2, '2026-10-14 23:30:00', 88.0, '2026-10-16 06:00:00', NULL), "
+        "('price', '2026-10-15', 1, '2026-10-14 23:00:00', 87.0, '2026-10-16 06:00:00', NULL)"
+    )
+    con.close()
+
+    contract = load_contract(CONTRACTS_DIR / "elexon_gb_power_price.yaml")
+    points = data.series_as_known_at(
+        data.Store(tmp_path), contract, "price", datetime(2026, 10, 17)
+    )
+    # Ordered by period, and dated by the half hour rather than the day.
+    assert points == [["2026-10-14T23:00", 87.0], ["2026-10-14T23:30", 88.0]]

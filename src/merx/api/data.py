@@ -53,6 +53,24 @@ class Store:
     def has(self, schema: str, table: str) -> bool:
         return (schema, table) in self.tables()
 
+    def columns(self, schema: str, table: str) -> set[str]:
+        """The columns a table actually has.
+
+        The website opens the database **read-only**, so it cannot migrate anything: it
+        has to read whatever shape it finds. Most tables are rebuilt on every run and
+        catch up by themselves, but a dataset blocked at the publish gate keeps its last
+        good publication for as long as it stays blocked — which can be indefinitely.
+        Where a query mentions a column added later, it asks first.
+        """
+        return {
+            name
+            for (name,) in self.query(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = ? AND table_name = ?",
+                [schema, table],
+            )
+        }
+
 
 def _iso(v):
     if isinstance(v, datetime | date):
@@ -195,18 +213,27 @@ def missing(store: Store, contract: Contract) -> dict:
     them a person has accepted."""
     if not (store.has("pit", contract.id) and store.has("staged", contract.id)):
         return {"missing": 0, "accepted": 0, "examples": []}
-    accepted_join = (
-        "LEFT JOIN ops.accepted_withdrawals a ON a.dataset_id = ? "
-        "AND a.measure = k.measure AND a.valid_date = k.valid_date AND a.period = k.period"
-        if store.has("ops", "accepted_withdrawals")
-        else ""
-    )
-    accepted_col = "a.dataset_id IS NOT NULL" if accepted_join else "false"
+    # The key is (measure, valid_date, period), except in tables written before period
+    # existed. Matching on the columns both sides actually have keeps the comparison
+    # correct either way: for daily data period is always 0, so leaving it out of the
+    # key changes nothing.
+    key = ["measure", "valid_date"]
+    if {"period"} <= store.columns("pit", contract.id) & store.columns("staged", contract.id):
+        key.append("period")
+    keys = ", ".join(key)
+
+    accepted_join, accepted_col = "", "false"
+    if store.has("ops", "accepted_withdrawals"):
+        on = " AND ".join(
+            f"a.{c} = k.{c}" for c in key if c in store.columns("ops", "accepted_withdrawals")
+        )
+        accepted_join = f"LEFT JOIN ops.accepted_withdrawals a ON a.dataset_id = ? AND {on}"
+        accepted_col = "a.dataset_id IS NOT NULL"
     rows = store.query(
         f"""
-        WITH k AS (SELECT DISTINCT measure, valid_date, period FROM pit."{contract.id}")
+        WITH k AS (SELECT DISTINCT {keys} FROM pit."{contract.id}")
         SELECT k.measure, k.valid_date, {accepted_col}
-        FROM k ANTI JOIN staged."{contract.id}" s USING (measure, valid_date, period)
+        FROM k ANTI JOIN staged."{contract.id}" s USING ({keys})
         {accepted_join}
         ORDER BY k.valid_date DESC
         """,
@@ -325,10 +352,17 @@ def published_series(
 def series_as_known_at(store: Store, contract: Contract, measure: str, at: datetime) -> list[list]:
     if not store.has("pit", contract.id):
         return []
-    # The history keeps every period, so a sub-daily series is ordered by both and
-    # dated by its period's start, exactly as the published series is.
-    x = "strftime(valid_time_utc, '%Y-%m-%dT%H:%M')" if contract.sub_daily else "valid_date"
-    order = "valid_date, period" if contract.sub_daily else "valid_date"
+    # The history stores a period but not its start time, so a sub-daily series is
+    # dated here by the period's start only when the column is present; otherwise the
+    # date alone is returned, which the chart reads as the start of that day.
+    available = store.columns("pit", contract.id)
+    sub_daily = contract.sub_daily and "period" in available
+    x = (
+        "strftime(valid_time_utc, '%Y-%m-%dT%H:%M')"
+        if sub_daily and "valid_time_utc" in available
+        else "valid_date"
+    )
+    order = "valid_date, period" if sub_daily else "valid_date"
     rows = store.query(
         f'SELECT {x}, value FROM pit."{contract.id}" '
         "WHERE measure = ? AND known_from_utc <= ? "

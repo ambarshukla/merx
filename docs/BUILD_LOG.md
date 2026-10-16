@@ -576,3 +576,28 @@ the fix is removed.
 **Worth naming.** "Status is green" and "the page works" were being measured on
 different tables. A check that reads one artifact says nothing about another, and the
 endpoints had been tested while the page had not.
+
+## 2026-10-17: the rest of the same mistake
+
+Fixing the empty charts uncovered two more faces of one error — adding `period` and
+`valid_time_utc` to the engine's tables without a path for data already on disk.
+
+**The operations detail panel was returning 500 for every dataset**, not just the stale
+ones, because `ops.accepted_withdrawals` on the host predates the column too and the
+query joined on it. The website opens the database **read-only**, so unlike the engine it
+cannot migrate its way out: it has to read whatever shape it finds. It now asks each
+table which columns it has and matches on the ones both sides share. For daily data
+`period` is always 0, so leaving it out of a key changes no answer.
+
+**"As known on" was broken for every sub-daily series, by design rather than by
+staleness** — the point-in-time store had never carried `valid_time_utc` at all. Half an
+hour's data dated only by its day would put 48 points on the same x value and draw as a
+vertical line. The history now stores the period's start alongside the period, verified
+by rebuilding the GB power history and reading it back: 6,665 versions, dated
+`2026-03-01T00:00`, `00:30`, `01:00` as they should be.
+
+**The pattern worth naming.** Three failures, one cause: a column was added and the
+queries that use it shipped before the tables had it. The parts that rebuild themselves
+each run recovered silently, which is exactly why this was hard to see — the broken
+parts were the ones that *don't* rebuild, and they are the blocked datasets and the
+read-only reader.
