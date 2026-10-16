@@ -12,6 +12,7 @@ import dagster as dg
 from merx.config import data_dir as default_data_dir
 from merx.contracts import load_contracts
 from merx.orchestration.factory import build_assets, build_checks, build_schedules
+from merx.orchestration.lab import build_lab_assets
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import load_reference
 
@@ -23,7 +24,10 @@ def build_definitions(
     contracts = load_contracts(reference)
     jobs, schedules = build_schedules(contracts)
     return dg.Definitions(
-        assets=[a for c in contracts for a in build_assets(c, reference)],
+        assets=[
+            *(a for c in contracts for a in build_assets(c, reference)),
+            *build_lab_assets(contracts),
+        ],
         asset_checks=[k for c in contracts for k in build_checks(c)],
         jobs=jobs,
         schedules=schedules,

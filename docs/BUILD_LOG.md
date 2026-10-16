@@ -84,3 +84,24 @@ scoped to one measure, and freshness looks at the stalest measure. 47 tests.
 Live rerun of all six datasets: identical row counts, date ranges and extremes to the
 previous run, and the same single failing check (futures freshness, a warning).
 Prediction: identical. Matched.
+
+## 2026-10-15: the data-quality lab and detector bake-off
+
+**Built.** `merx.quality`: seeded defects with a ground-truth manifest (five types),
+five detectors (static band, robust z, seasonal, repeat run, and suites), scoring
+(recall, precision, alerts per year on real data), a lab runner writing `lab.*` tables,
+a Markdown report, and the Dagster asset `lab/detector_bakeoff` (65 seconds for six
+series, five seeds, 15 detector settings). 66 tests. Decision D-007; full write-up in
+[`DQ_LAB.md`](DQ_LAB.md).
+
+**Predictions against results.** Static band precision exactly 50%, as predicted; no
+change-based detector catches stale runs, as predicted; robust z precision 55% against a
+prediction of over 90%, which exposed two flaws in the design (an error longer than the
+reset is adopted and its recovery flagged; stale values shrink the yardstick). Version 2
+fixed both: precision 83% to 87% on every price series. On gas in storage it stays
+low (26%), and the reason is structural, not a bug: change-based detectors are fragile on
+seasonal series. The seasonal suite is the best overall: 87% recall, 87% precision,
+2.4 alerts a year per series.
+
+**Real events, correctly flagged by every detector on untouched data:** WTI spot
+-36.98 on 2020-04-20, and Henry Hub 30.72 on 2026-01-23.

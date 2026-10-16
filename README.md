@@ -4,10 +4,10 @@
 as a small, honest version of how commodity datasets are manufactured and kept
 trustworthy.
 
-> **Status: Phase 0 (foundations).** Five real EIA datasets run end to end through
-> the engine: contract → raw download → staged table → checks, orchestrated by
-> Dagster. Everything after that (enrichment, the publish gate, the quality lab,
-> point-in-time views, the consoles) is still to come.
+> **Status: early.** Six real EIA datasets run end to end through the engine
+> (contract → raw download → staged table → checks, orchestrated by Dagster), and the
+> data-quality lab scores anomaly detectors on them. Still to come: positioning data,
+> the publish gate, point-in-time views, and the consoles.
 
 ## What runs today
 
@@ -40,6 +40,23 @@ Every staged table has the same long shape: one row per `(measure, valid_date)`,
 the value, its unit, our instrument identifier, and the raw file and fetch time it came
 from. A single-series dataset has one measure (`price`, `stocks`, `working_gas`).
 
+## The data-quality lab
+
+Which detectors actually catch bad data, and at what cost in false alarms? The lab
+seeds five kinds of synthetic error into copies of the real series, runs the
+detectors, and scores every flag against a ground-truth list. Headline from the
+2026-10-15 run (six series, five seeds, 1,075 seeded defects):
+
+| Detector | Recall | Precision | Alerts per year on real data |
+|---|---|---|---|
+| Static band (20% move) | 64% | 50% | 0.6 |
+| Robust z-score, first version | 71% | 55% | 4.8 |
+| Robust z-score, fixed after the first run | 70% | 72% | 3.9 |
+| Seasonal + repeated-value rule | 87% | 87% | 2.4 |
+
+Method, predictions against results, findings and limits:
+[`docs/DQ_LAB.md`](docs/DQ_LAB.md).
+
 ## Run it
 
 Needs Python 3.14.
@@ -65,6 +82,7 @@ set `DAGSTER_HOME` to an absolute path to keep run history between sessions.
 | `src/merx/sources/` | Downloading, and one strict parser per file format |
 | `src/merx/store/` | The raw zone and its manifest; the DuckDB connection |
 | `src/merx/engine/` | Staging and checks, as plain functions |
+| `src/merx/quality/` | The data-quality lab: seeded defects, detectors, scoring |
 | `src/merx/orchestration/` | Dagster: the asset factory, resources, schedules |
 | `tests/` | Tests on synthetic files generated at test time |
 
