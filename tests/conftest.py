@@ -69,3 +69,15 @@ WTI_POINTS: list[tuple[date, float | None]] = [
 @pytest.fixture
 def wti_xls() -> bytes:
     return eia_workbook("RWTC", WTI_POINTS)
+
+
+def core_assets(contract, reference=None):
+    """A contract's assets without its reconciliation, which needs a second dataset."""
+    from merx.orchestration.factory import build_assets
+    from merx.reference import load_reference
+
+    return [
+        a
+        for a in build_assets(contract, reference or load_reference())
+        if not any(k.path[0] == "reconcile" for k in a.keys)
+    ]

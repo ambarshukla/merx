@@ -216,3 +216,36 @@ revisions, and show a dataset as known at any moment. 108 tests.
 everything else passes. Result: exactly that. Exception 2 (`eia_wti_spot`,
 `no_withdrawals`) was classified `source_data_error`; the values were deliberately not
 accepted, pending a reconciliation against EIA's API.
+
+## 2026-10-16: EIA's API as a second channel, reconciled with the spreadsheet
+
+**Built.** A parser and paged fetcher for EIA's API v2, the `eia_api_wti_spot`
+contract, the `reconcile_with` field and `reconcile/<id>` asset (D-012), and a small
+`.env` loader so scripts and tests see the key as `dagster dev` does. 113 tests,
+including one that checks the key is in neither the manifest nor any raw file.
+
+**First run** (predictions in brackets). The API returned 10,272 daily values,
+1986-01-02 to 2026-10-14 (10,272). Against the spreadsheet's 9,523:
+
+| Class | Count | Prediction |
+|---|---|---|
+| match | 9,515 | |
+| value_differs | **0** | 0 |
+| only_there (API only) | 757 | about 749 |
+| only_here (spreadsheet only) | **8** | 0 |
+| outside_range | 0 | a few |
+
+- **Where both channels have a date, they agree exactly.** The disagreement is entirely
+  about which dates exist.
+- **744 of the 757 API-only dates are the values the spreadsheet dropped** in
+  September or October 2026. The other **13 are US public holidays** (Thanksgiving,
+  Christmas, New Year's Day, Labor Day, Martin Luther King Day, Presidents' Day,
+  Memorial Day, Columbus Day, Veterans Day, Independence Day observed) on which the
+  spreadsheet has never had a value. On 10 of them the API's value repeats the previous
+  trading day exactly, a carried-forward fill rather than a traded price; on 3 it does not.
+- **8 dates are in the spreadsheet and not in the API**, all of them Tuesdays, between
+  2014-09-30 and 2024-04-16. No explanation is offered here.
+- No stored URL or raw file contains the API key.
+
+WTI spot stays blocked at the gate (D-011) until someone decides between accepting the
+744 losses and repairing them from the API.

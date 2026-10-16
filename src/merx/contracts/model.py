@@ -21,7 +21,7 @@ Severity = Literal["error", "warn"]
 MeasureName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$")]
 
 # File formats that hold exactly one series, so their contract names exactly one measure.
-SINGLE_SERIES_FORMATS = {"eia_hist_xls"}
+SINGLE_SERIES_FORMATS = {"eia_hist_xls", "eia_api_v2"}
 
 
 class _Strict(BaseModel):
@@ -37,7 +37,7 @@ class YearlyPartitions(_Strict):
 
 class Source(_Strict):
     provider: Literal["eia", "cftc"]
-    format: Literal["eia_hist_xls", "cftc_disaggregated"]
+    format: Literal["eia_hist_xls", "eia_api_v2", "cftc_disaggregated"]
     url: str = Field(pattern=r"^https://")
     # The provider's own identifier for the series, checked against the file on every run.
     series_key: str
@@ -47,6 +47,8 @@ class Source(_Strict):
     # Import dated copies of this file from the Wayback Machine to backfill history from
     # before the project began (point-in-time store). Single-file sources only.
     archive_backfill: bool = False
+    # For APIs that need a key: the environment variable holding it (never the key itself).
+    api_key_env: str | None = None
 
     @model_validator(mode="after")
     def _partitions_match_url(self) -> Source:
@@ -54,12 +56,20 @@ class Source(_Strict):
             raise ValueError("a {year} placeholder in the url and partitions go together")
         if self.archive_backfill and self.partitions is not None:
             raise ValueError("archive_backfill is for single-file sources, not partitioned ones")
+        if (self.format == "eia_api_v2") != (self.api_key_env is not None):
+            raise ValueError("api_key_env is required for eia_api_v2 and only for it")
         return self
 
 
 class Schedule(_Strict):
     cron: str
     timezone: str = "UTC"
+
+
+class ReconcileWith(_Strict):
+    dataset: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    # Largest absolute difference still counted as a match.
+    tolerance: float = Field(default=0.0, ge=0)
 
 
 class NotNullCheck(_Strict):
@@ -142,6 +152,9 @@ class Contract(_Strict):
     checks: list[Check] = Field(min_length=1)
     # Whether the data-quality lab seeds defects into this dataset's series.
     in_quality_lab: bool = True
+    # Another dataset carrying the same series through a different channel; the two are
+    # reconciled value by value (reconcile/<id>).
+    reconcile_with: ReconcileWith | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Contract:

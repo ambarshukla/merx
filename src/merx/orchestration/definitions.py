@@ -10,6 +10,7 @@ from pathlib import Path
 import dagster as dg
 
 from merx.config import data_dir as default_data_dir
+from merx.config import load_dotenv
 from merx.contracts import load_contracts
 from merx.orchestration.factory import build_assets, build_schedules
 from merx.orchestration.lab import build_lab_assets
@@ -20,6 +21,7 @@ from merx.reference import load_reference
 def build_definitions(
     data_dir: Path | None = None, fetcher: HttpFetcher | None = None
 ) -> dg.Definitions:
+    load_dotenv()
     reference = load_reference()
     contracts = load_contracts(reference)
     jobs, schedules = build_schedules(contracts)

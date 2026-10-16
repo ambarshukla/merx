@@ -8,12 +8,12 @@ from pathlib import Path
 
 import dagster as dg
 import pytest
-from conftest import eia_workbook
+from conftest import core_assets, eia_workbook
 
 from merx.config import CONTRACTS_DIR
 from merx.contracts import load_contract, load_contracts
 from merx.orchestration.definitions import build_definitions
-from merx.orchestration.factory import build_assets, schedule_job_name
+from merx.orchestration.factory import schedule_job_name
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import load_reference
 from merx.sources import wayback
@@ -52,7 +52,7 @@ def run(tmp_path: Path, points) -> dg.ExecuteInProcessResult:
     source.write_bytes(eia_workbook("RWTC", points))
     reference = load_reference()
     return dg.materialize(
-        [*build_assets(CONTRACT, reference)],
+        core_assets(CONTRACT, reference),
         resources={
             "store": DataStore(data_dir=str(tmp_path / "data")),
             "fetcher": FileFetcher(files={CONTRACT.source.url: str(source)}),
@@ -125,7 +125,7 @@ def test_wrong_file_fails_at_parse_and_stages_nothing(tmp_path):
     source = tmp_path / "source.xls"
     source.write_bytes(eia_workbook("RBRTE", recent_points()))
     result = dg.materialize(
-        build_assets(CONTRACT, load_reference()),
+        core_assets(CONTRACT),
         resources={
             "store": DataStore(data_dir=str(tmp_path / "data")),
             "fetcher": FileFetcher(files={CONTRACT.source.url: str(source)}),

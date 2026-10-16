@@ -10,6 +10,7 @@ Adding a dataset is adding a YAML file; nothing here changes unless the dataset 
 new file format.
 """
 
+import os
 import re
 import time
 from datetime import UTC, datetime, timedelta
@@ -19,13 +20,13 @@ from typing import Any
 import dagster as dg
 
 from merx.contracts import Contract, check_name
-from merx.engine import formats, ops, pit
+from merx.engine import formats, ops, pit, reconcile
 from merx.engine.checks import run_check
 from merx.engine.publish import publish, published_table
 from merx.engine.stage import stage, staged_table
 from merx.orchestration.resources import DataStore, HttpFetcher
 from merx.reference import Reference
-from merx.sources import wayback
+from merx.sources import eia_api, wayback
 from merx.store import connect
 from merx.store.raw import RawZone
 
@@ -52,9 +53,16 @@ def pit_key(contract: Contract) -> dg.AssetKey:
     return dg.AssetKey(["pit", contract.id])
 
 
+def reconcile_key(contract: Contract) -> dg.AssetKey:
+    return dg.AssetKey(["reconcile", contract.id])
+
+
 def refresh_keys(contract: Contract) -> list[dg.AssetKey]:
     """What a scheduled refresh rebuilds. The archive import is run by hand."""
-    return [raw_key(contract), staged_key(contract), published_key(contract), pit_key(contract)]
+    keys = [raw_key(contract), staged_key(contract), published_key(contract), pit_key(contract)]
+    if contract.reconcile_with is not None:
+        keys.append(reconcile_key(contract))
+    return keys
 
 
 def _tags(contract: Contract) -> dict[str, str]:
@@ -68,6 +76,20 @@ def partitions_def(contract: Contract) -> dg.StaticPartitionsDefinition | None:
         return None
     return dg.StaticPartitionsDefinition(
         [str(y) for y in range(p.start, datetime.now(UTC).year + 1)]
+    )
+
+
+def _fetch_api(contract: Contract, fetcher: HttpFetcher) -> bytes:
+    env = contract.source.api_key_env
+    key = os.environ.get(env or "")
+    if not key:
+        raise dg.Failure(description=f"{contract.id}: environment variable {env} is not set")
+    return eia_api.fetch_all(
+        lambda u: fetcher.fetch(u).content,
+        contract.source.url,
+        contract.source.series_key,
+        contract.frequency,
+        key,
     )
 
 
@@ -94,14 +116,18 @@ def build_assets(contract: Contract, reference: Reference) -> list[dg.AssetsDefi
     ) -> dg.MaterializeResult:
         partition = context.partition_key if partitioned else None
         url = contract.source.url.replace("{year}", partition or "")
-        result = fetcher.fetch(url)
+        if contract.source.format == "eia_api_v2":
+            content, status, headers = _fetch_api(contract, fetcher), 200, {}
+        else:
+            result = fetcher.fetch(url)
+            content, status, headers = result.content, result.status, result.headers
         landed = RawZone(store.path).land(
             dataset_id=contract.id,
             provider=contract.source.provider,
-            url=url,
-            content=result.content,
-            http_status=result.status,
-            headers=result.headers,
+            url=url,  # never includes an API key
+            content=content,
+            http_status=status,
+            headers=headers,
             partition=partition,
         )
         return dg.MaterializeResult(
@@ -282,6 +308,46 @@ def build_history_assets(contract: Contract) -> list[dg.AssetsDefinition]:
         return dg.MaterializeResult(metadata=summary)
 
     assets.append(pit_asset)
+
+    if contract.reconcile_with is not None:
+        other = contract.reconcile_with.dataset
+        tolerance = contract.reconcile_with.tolerance
+
+        @dg.asset(
+            key=reconcile_key(contract),
+            deps=[staged_key(contract), dg.AssetKey(["staged", other])],
+            group_name=contract.domain,
+            description=(
+                f"{contract.title}: every value compared with {other}, the same series "
+                "through another channel. Differences are kept in recon.<id> with a class."
+            ),
+            owners=[f"team:{contract.owner}"],
+            tags=_tags(contract),
+            kinds={"duckdb"},
+            metadata={"table": reconcile.recon_table(contract), "other": other},
+            check_specs=[dg.AssetCheckSpec(name="reconciled", asset=reconcile_key(contract))],
+        )
+        def reconcile_asset(store: DataStore) -> dg.MaterializeResult:
+            con = connect(store.path)
+            try:
+                counts = reconcile.reconcile(con, contract, other, tolerance)
+            finally:
+                con.close()
+            breaks = sum(counts[c] for c in reconcile.BREAK_CLASSES)
+            return dg.MaterializeResult(
+                metadata=counts,
+                check_results=[
+                    dg.AssetCheckResult(
+                        check_name="reconciled",
+                        passed=breaks == 0,
+                        severity=dg.AssetCheckSeverity.WARN,
+                        description=f"{breaks} breaks against {other}",
+                        metadata=counts,
+                    )
+                ],
+            )
+
+        assets.append(reconcile_asset)
     return assets
 
 

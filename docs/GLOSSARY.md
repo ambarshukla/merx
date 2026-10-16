@@ -15,9 +15,12 @@ uses them.
 | **Bitemporal** | Storing two times per fact: when it applied (valid time) and when we learned it (knowledge time). |
 | **Blocking check** | An asset check whose failure stops anything downstream in the same run. Here: error-severity checks on tier 1 datasets. |
 | **Build (staged build)** | One rebuild of a staged table, identified by a fingerprint of the raw files it came from. Check results and publications refer to it. |
+| **Break (reconciliation)** | A disagreement between two channels for the same value: different values, or a date only one of them has. |
 | **Brent** | The main international crude oil price benchmark, originally for oil from the North Sea. |
+| **Carried-forward value** | A value repeated from the previous date to fill a day with no real observation, such as a market holiday. |
 | **CFTC (Commodity Futures Trading Commission)** | The US regulator of futures markets. Publishes weekly reports of who holds futures positions. |
 | **COT (Commitments of Traders)** | The CFTC's weekly report of futures positions by type of trader, as of Tuesday and published the following Friday. |
+| **Channel** | One way a source delivers the same data, such as a spreadsheet download or an API. Two channels can disagree. |
 | **Contango** | A forward curve where later delivery costs more than nearer delivery, usually a sign of ample supply and storage. |
 | **Contract 1 (front month)** | The futures contract nearest to expiry. "Contract 1" is a series that rolls to the next contract as each one expires. |
 | **Crosswalk** | A table that maps each provider's identifier for something onto our own identifier, so data is joined on codes, not on names that can change. |
@@ -51,6 +54,7 @@ uses them.
 | **Quarantine (detector)** | A flagged value is not used as the reference or in the yardstick for judging later values, so one bad value cannot distort the next judgements. |
 | **Raw zone (landing zone)** | Where downloads are stored exactly as received, never edited. Everything downstream is rebuilt from it. |
 | **Recall** | Of the values that are truly wrong, the share a detector flags. Low recall means errors reach users. |
+| **Reconciliation** | Comparing two independent copies of the same data value by value, and explaining every difference. |
 | **Release calendar** | When a source publishes each update. EIA states the current and next release date inside each file. |
 | **Repeat share** | The share of exceptions that recur on a check that has failed before. A high share means fixes are not holding. |
 | **Resource (Dagster)** | A shared service an asset asks for by name, such as the downloader or the data store; tests swap in a fake. |
