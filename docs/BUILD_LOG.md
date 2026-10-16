@@ -483,3 +483,27 @@ publisher ships its own reconciliation report inside the data file.
 across the eight. That is deliberate — one contract, one pipeline, no shared state — and
 it is the clearest argument yet for deduplicating identical raw downloads by checksum,
 which is still the recorded follow-up.
+
+## 2026-10-16: two things the live site taught us
+
+**A page can be broken while every check passes.** The client page failed on load with
+`renderConcepts is not defined`. `static/explain.js` held a byte-for-byte copy of
+`chart.js` — a bad scripted edit had written the wrong contents — so the page loaded
+chart.js twice and the explainer's functions existed nowhere. Both files were valid
+JavaScript, both served 200, and every API behind the page worked, so checking the
+endpoints proved only that the server was healthy while the page was dead.
+
+Four tests now cover it: every function a page calls must be defined by a script that
+page loads; no two static files may be copies of each other; `explain.js` must define
+what the client page needs; and every `data-explain` term must have an explanation.
+Reintroducing the bug fails all four. Finding calls in JavaScript means first removing
+string literals — including nested template literals, where `${...}` holds real code
+and the text around it does not — so that scanner is tested too.
+
+**A missing key is not always a missing field.** Backfilling carbon intensity to January
+2025 failed outright: 26 half hours early in that month carry no `forecast` key at all,
+only the outturn, while every later month is complete. The parser treated any absent key
+as the API changing shape. It now distinguishes the two — a key missing from *one* half
+hour is a gap and becomes a null, while a key missing from *every* half hour is still a
+format error, because publishing a column of nulls would make an empty series look like
+a present one.

@@ -45,6 +45,12 @@ def parse(
         raise CarbonFormatError("no 'data' in the carbon intensity response")
 
     observations: list[tuple[str, date, int, datetime, float | None]] = []
+    # A key missing from one half hour is a gap in the record; a key missing from every
+    # half hour is the API having changed shape. Only the second is a format error, so
+    # the two are counted apart rather than judged row by row. Observed 2026-10-16: 26
+    # half hours in January 2025 carry no forecast at all, while every later month is
+    # complete.
+    present = dict.fromkeys(columns, 0)
     for row in rows:
         try:
             start = datetime.fromisoformat(row["from"].replace("Z", "+00:00")).astimezone(UTC)
@@ -55,15 +61,21 @@ def parse(
         if month is not None and day.strftime("%Y-%m") != month:
             continue
         for measure, key in columns.items():
-            if key not in intensity:
-                raise CarbonFormatError(f"no {key!r} in the intensity object: {sorted(intensity)}")
-            value = intensity[key]
+            value = intensity.get(key)
+            present[measure] += key in intensity
             observations.append(
                 (measure, day, period, start, None if value is None else float(value))
             )
 
     if not observations:
         raise CarbonFormatError("no carbon intensity rows" + (f" in {month}" if month else ""))
+    absent = sorted(columns[m] for m, seen in present.items() if not seen)
+    if absent:
+        raise CarbonFormatError(
+            f"{absent} missing from every half hour"
+            + (f" in {month}" if month else "")
+            + ": the intensity object has changed shape"
+        )
     return ParsedIntensity(observations=observations)
 
 
