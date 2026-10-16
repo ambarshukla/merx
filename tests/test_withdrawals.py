@@ -5,16 +5,14 @@ from pathlib import Path
 
 import dagster as dg
 import pytest
-from conftest import eia_workbook
+from conftest import core_assets, eia_workbook
 from test_pipeline import FileFetcher
 
 from merx import cli
 from merx.config import CONTRACTS_DIR
 from merx.contracts import load_contract
 from merx.engine import withdrawals
-from merx.orchestration.factory import build_assets
 from merx.orchestration.resources import DataStore
-from merx.reference import load_reference
 from merx.store import connect
 
 WTI = load_contract(CONTRACTS_DIR / "eia_wti_spot.yaml")  # tier 1
@@ -29,7 +27,7 @@ def run(tmp_path: Path, points) -> dg.ExecuteInProcessResult:
     source = tmp_path / "wti.xls"
     source.write_bytes(eia_workbook("RWTC", points))
     return dg.materialize(
-        build_assets(WTI, load_reference()),
+        core_assets(WTI),
         resources={
             "store": DataStore(data_dir=str(tmp_path / "data")),
             "fetcher": FileFetcher(files={WTI.source.url: str(source)}),

@@ -1,0 +1,29 @@
+# WTI crude oil spot price at Cushing, through EIA's API (v2): the same series as
+# eia_wti_spot, through a second channel. Kept so the two can be reconciled: on
+# 2026-10-15 the API held 744 daily values that the spreadsheet had dropped.
+id: eia_api_wti_spot
+title: WTI crude oil spot price, Cushing, daily (EIA API)
+domain: oil
+owner: oil-data-steward
+tier: 2
+frequency: daily
+instrument: WTI_CUSHING_SPOT
+unit: USD/bbl
+measures: [price]
+source:
+  provider: eia
+  format: eia_api_v2
+  url: https://api.eia.gov/v2/petroleum/pri/spt/data/
+  series_key: RWTC
+  # The key is read from this environment variable (set in .env); it is never stored.
+  api_key_env: EIA_API_KEY
+schedule:
+  cron: "30 18 * * 1-5"
+  timezone: America/New_York
+in_quality_lab: false
+checks:
+  - {type: not_null, column: value}
+  - {type: unique, columns: [measure, valid_date]}
+  - {type: range, column: value, min: -100, max: 300}
+  - {type: freshness, max_age_days: 10}
+  - {type: no_withdrawals}

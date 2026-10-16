@@ -54,4 +54,27 @@ def load_contracts(reference: Reference, directory: Path = CONTRACTS_DIR) -> lis
         raise ContractError(f"no contracts found in {directory}")
     for contract in contracts:
         validate_against_reference(contract, reference)
+    validate_reconciliations(contracts)
     return contracts
+
+
+def validate_reconciliations(contracts: list[Contract]) -> None:
+    """A reconciliation pairs two datasets of the same instrument, unit and measures."""
+    by_id = {c.id: c for c in contracts}
+    for contract in contracts:
+        if contract.reconcile_with is None:
+            continue
+        other = by_id.get(contract.reconcile_with.dataset)
+        if other is None:
+            raise ContractError(
+                f"{contract.id}: reconcile_with names unknown dataset "
+                f"{contract.reconcile_with.dataset}"
+            )
+        if other.id == contract.id:
+            raise ContractError(f"{contract.id}: cannot reconcile a dataset with itself")
+        for field in ("instrument", "unit", "measures"):
+            if getattr(contract, field) != getattr(other, field):
+                raise ContractError(
+                    f"{contract.id}: {field} differs from {other.id}, so they cannot be "
+                    "reconciled value by value"
+                )

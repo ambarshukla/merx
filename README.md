@@ -4,7 +4,7 @@
 as a small, honest version of how commodity datasets are manufactured and kept
 trustworthy.
 
-> **Status: early.** Eight real datasets from two public sources run end to end through
+> **Status: early.** Nine real datasets from two public sources run end to end through
 > the engine (contract → raw download → staged table → checks → publish gate,
 > orchestrated by Dagster), failing checks become tracked exceptions, every value keeps
 > its full revision history, and the data-quality lab scores anomaly detectors on the
@@ -20,6 +20,7 @@ trustworthy.
 | US crude oil stocks excluding the SPR | EIA | weekly | 1 |
 | US Lower 48 natural gas in storage | EIA | weekly | 1 |
 | WTI crude oil futures, contract 1 | EIA | daily (series ended 2024-04-05) | 3 |
+| WTI crude oil spot, second channel (EIA API) | EIA API | daily | 2 |
 | WTI futures positions by trader group (14 measures) | CFTC | weekly, yearly files from 2010 | 2 |
 | Henry Hub futures positions by trader group (14 measures) | CFTC | weekly, yearly files from 2010 | 2 |
 
@@ -50,7 +51,9 @@ As of 2026-10-16, seven datasets publish. The futures series (tier 3) is marked 
 because its newest value is from April 2024 (root cause `source_discontinued`). **WTI
 spot is blocked** by `no_withdrawals`: 744 daily prices that the history knows are
 missing from the source's current file (root cause `source_data_error`), and nobody has
-accepted that loss.
+accepted that loss. Reconciling the spreadsheet against EIA's API (D-012) shows the two
+channels agree exactly on every shared date; the API has those 744 values plus 13
+holiday fills, and lacks 8 dates the spreadsheet has.
 
 Every staged table has the same long shape: one row per `(measure, valid_date)`, with
 the value, its unit, our instrument identifier, and the raw file and fetch time it came

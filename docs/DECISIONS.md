@@ -263,3 +263,27 @@ record of who decided or when).
 **Consequences.** WTI spot is blocked at the gate until someone decides what to do about
 the 744 values; the previous publication stays in place. The check is only as good as
 the history: it cannot see values removed before the earliest raw file.
+
+## D-012: A second channel is a dataset of its own, reconciled value by value (2026-10-16)
+
+**Context.** EIA serves the WTI spot price through a spreadsheet and through an API.
+The point-in-time history showed the spreadsheet had lost 744 values the API still
+serves (D-010, D-011). Deciding what to publish needs a full, classified comparison,
+not a sample.
+
+**Decision.** The API is onboarded as its own dataset (`eia_api_wti_spot`, format
+`eia_api_v2`), with its own contract, checks, gate and history. A `reconcile_with` field
+on the spreadsheet's contract adds a `reconcile/<id>` asset that compares the two value
+by value and stores every difference in `recon."<id>"`, classed `value_differs`,
+`only_here`, `only_there` or `outside_range` (timing at the ends). The API key is read
+from the environment; the API echoes it back in every reply, and it is removed before
+the reply is landed, so no key is stored anywhere.
+
+**Alternatives considered.** Replacing the spreadsheet with the API (the API has gaps
+and fill values of its own, see below, so neither channel is simply right); comparing
+row counts only (a count says nothing about which dates, or whether values agree).
+
+**Consequences.** Every disagreement between the channels is a row someone can explain.
+The reconciliation is a warning-level check, not part of the publish gate: it informs a
+decision rather than making it. Which channel to trust for which dates is now a choice
+with evidence behind it.

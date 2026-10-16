@@ -6,7 +6,7 @@ from pathlib import Path
 import dagster as dg
 import duckdb
 import pytest
-from conftest import eia_workbook
+from conftest import core_assets, eia_workbook
 from test_pipeline import FileFetcher, recent_points
 
 from merx.config import CONTRACTS_DIR
@@ -14,9 +14,7 @@ from merx.contracts import check_name, load_contract
 from merx.engine import ops
 from merx.engine.checks import CheckOutcome
 from merx.engine.publish import decide
-from merx.orchestration.factory import build_assets
 from merx.orchestration.resources import DataStore
-from merx.reference import load_reference
 from merx.store import connect
 
 WTI = load_contract(CONTRACTS_DIR / "eia_wti_spot.yaml")  # tier 1
@@ -126,7 +124,7 @@ def run_all(tmp_path: Path, contract, points, key: str) -> dg.ExecuteInProcessRe
     source = tmp_path / f"{contract.id}.xls"
     source.write_bytes(eia_workbook(key, points))
     return dg.materialize(
-        [*build_assets(contract, load_reference())],
+        core_assets(contract),
         resources={
             "store": DataStore(data_dir=str(tmp_path / "data")),
             "fetcher": FileFetcher(files={contract.source.url: str(source)}),
