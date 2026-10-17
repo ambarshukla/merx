@@ -836,7 +836,14 @@ def _withdrawal_findings(store: Store, by_id: dict[str, Contract], tables: set) 
         contract = by_id.get(dataset_id)
         if contract is None or ("pit", dataset_id) not in tables:
             continue
-        asof, count = _before_the_largest_removal(store, dataset_id)
+        # Two questions, two numbers. How much the source took away is the total across
+        # every removal; which date to replay at comes from the single largest one.
+        # Reporting the largest event's size as the count would quietly leave out every
+        # value lost in the smaller ones.
+        asof, _largest = _before_the_largest_removal(store, dataset_id)
+        (count,) = store.query(
+            f'SELECT count(*) FROM pit."{dataset_id}" WHERE ended_by = ?', ["withdrawn"]
+        )[0]
         if not count:
             continue
         out.append({"dataset": dataset_id, "title": contract.title, "count": count, "asof": asof})

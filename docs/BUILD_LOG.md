@@ -837,3 +837,25 @@ spreadsheet… still in the API" — and the World Bank against EIA is not that.
 tolerance is zero and the alignment exact, the channel wording stays; otherwise the
 labels name the two publishers and the tolerance: *"Only World Bank Commodity Markets
 publishes this period"*, *"Both publish it, and they differ by more than 1.0 USD/bbl"*.
+
+## The headline was undercounting itself (2026-10-17)
+
+The findings band said **3,401 prices removed**. The exceptions behind it said 744, 894
+and 1,776 — which is 3,414.
+
+The cause was one variable doing two jobs. `_before_the_largest_removal` answers "which
+date should the button replay at", and returns the size of that removal along with the
+date; the finding then used that size as the dataset's count. For a series whose values
+all vanished at once the two are identical, which is why it read correctly at first
+glance — but each of these three had also lost a handful of values in smaller, earlier
+removals, found by replaying archived copies. Thirteen values across the three.
+
+They are two different questions and now have two different queries: the count is every
+withdrawn value the history holds, and the date still comes from the largest single
+removal, because that is the one worth showing. A test pins the difference by taking one
+value away and then seven more, and asserting the count is eight while the link points at
+the removal of seven.
+
+Small, and worth writing down: the number was on the page that makes the claims, it was
+wrong in the direction that flatters nobody, and the only reason it was caught is that two
+documents quoting the same fact disagreed.
