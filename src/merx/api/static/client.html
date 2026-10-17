@@ -11,19 +11,28 @@
   <h1>merx</h1><span class="sub">published commodity data, with its history</span>
   <nav><a class="here" href="/client">Data</a><a href="/sources">Two sources</a><a href="/ops">Operations</a></nav>
 </header>
-<main data-loading aria-busy="true">
-  <section class="panel">
-    <div class="row" style="justify-content: space-between; align-items: flex-start">
-      <div>
-        <h2 style="margin:0 0 3px">Browse by sector</h2>
-        <div class="small muted" id="catalog-count">Loading the catalogue…</div>
-      </div>
-      <label class="small muted">Show
-        <select id="type-filter">
-          <option value="">every type of data</option>
-        </select>
-      </label>
+<main class="explorer" data-loading aria-busy="true">
+  <section class="panel full" id="findings-panel">
+    <div class="row" style="justify-content: space-between; align-items: baseline">
+      <h2 style="margin:0 0 8px">What the checks caught</h2>
+      <div class="small muted">Click any of these to see the evidence</div>
     </div>
+    <div class="findings" id="findings">
+      <span class="sk-card" style="height:76px"></span><span class="sk-card" style="height:76px"></span>
+      <span class="sk-card" style="height:76px"></span><span class="sk-card" style="height:76px"></span>
+    </div>
+  </section>
+
+  <section class="panel browse">
+    <div>
+      <h2 style="margin:0 0 3px">Browse by sector</h2>
+      <div class="small muted" id="catalog-count">Loading the catalogue…</div>
+    </div>
+    <label class="small muted" style="margin-top:8px; display:block">Show
+      <select id="type-filter">
+        <option value="">every type of data</option>
+      </select>
+    </label>
     <div class="sectors" id="sectors" style="margin-top:10px"></div>
     <div class="catalog" id="catalog" style="margin-top:10px">
       <span class="sk-card"></span><span class="sk-card"></span><span class="sk-card"></span>
@@ -32,6 +41,7 @@
     </div>
   </section>
 
+  <div class="detail">
   <section class="panel">
     <div class="row" style="justify-content: space-between">
       <div>
@@ -82,7 +92,7 @@
 
   <section class="panel">
     <h2>How this site treats the data</h2>
-    <div class="small">
+    <div class="small prose">
       <p>Only the <b>published</b> layer is shown: data that passed the publish gate.
         Tier 1 series are published only when no critical check fails; other tiers are
         published marked <span class="badge warn">warn</span>, with the failing checks
@@ -107,6 +117,7 @@
     </div>
     <div id="concepts" class="small"></div>
   </section>
+  </div>
 </main>
 <script src="/static/chart.js"></script>
 <script src="/static/explain.js"></script>
@@ -187,6 +198,29 @@ function drawSectors() {
   el.querySelectorAll("button").forEach((b) => (b.onclick = () => {
     sector = b.dataset.sector;
     drawSectors(); drawCatalog();
+  }));
+}
+
+// What the controls caught, as the records hold it now. Each one links to the view
+// that proves it: the dataset, and for a withdrawal the date to replay it at.
+function drawFindings(found) {
+  const el = document.getElementById("findings");
+  if (!found.length) {
+    document.getElementById("findings-panel").style.display = "none";
+    return;
+  }
+  el.innerHTML = found.map((f, i) => `
+    <button class="finding" data-i="${i}" title="${esc(f.headline)}. ${esc(f.detail)}">
+      <span class="n">${esc(f.number)}</span>
+      <span class="l">${esc(f.label)}</span>
+      <span class="by">caught by the ${esc(f.caught_by.replace(/_/g, " "))} check</span>
+    </button>`).join("");
+  el.querySelectorAll(".finding").forEach((b) => (b.onclick = () => {
+    const f = found[+b.dataset.i];
+    select(f.dataset, f.asof);
+    // "nearest" leaves the chart alone when it is already on screen, which it is on a
+    // wide layout; it only scrolls when the browser column has pushed it out of view.
+    document.getElementById("chart").scrollIntoView?.({ behavior: "smooth", block: "nearest" });
   }));
 }
 
@@ -280,7 +314,12 @@ function drawCatalog() {
 }
 
 async function load() {
-  catalog = await getJSON("/api/client/datasets");
+  const [cat, found] = await Promise.all([
+    getJSON("/api/client/datasets"),
+    getJSON("/api/client/findings"),
+  ]);
+  catalog = cat;
+  drawFindings(found);
   const types = [...new Set(catalog.map((c) => c.data_type))].sort();
   const filter = document.getElementById("type-filter");
   filter.innerHTML = `<option value="">every type of data</option>` +
@@ -310,7 +349,7 @@ function done() {
   main.setAttribute("aria-busy", "false");
 }
 
-function select(id) {
+function select(id, asof = null) {
   current = catalog.find((c) => c.id === id);
   if (!current) return Promise.resolve();
   // Sub-daily series hold thousands of points a month: a 15-year default would be
@@ -356,9 +395,12 @@ function select(id) {
   document.querySelectorAll("#presets a").forEach((a) => (a.onclick = (e) => {
     e.preventDefault(); document.getElementById("asof").value = a.dataset.d; draw();
   }));
+  // A replay date belongs to the series it was chosen for: carrying WTI's withdrawal
+  // date onto a copper price would silently answer a different question. It is set only
+  // by a caller that means it, or by a link naming this same dataset.
   const linked = new URLSearchParams(location.search);
-  document.getElementById("asof").value =
-    linked.get("dataset") === id && linked.get("asof") ? linked.get("asof") : "";
+  const fromLink = linked.get("dataset") === id ? linked.get("asof") : null;
+  document.getElementById("asof").value = asof || fromLink || "";
   // Put the concepts that matter for this dataset at the top of the list.
   const first = CONCEPTS_FOR[current.sector] || [];
   renderConcepts("concepts", [...first, ...ALWAYS.filter((k) => !first.includes(k))]);

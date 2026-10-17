@@ -698,3 +698,57 @@ replace `<main>` with a `<pre>` holding the exception. It now explains that the 
 up and its data did not answer, gives the underlying message quietly, and offers a retry.
 A reader who sees a stack trace learns only that something is broken; the thing worth
 telling them is whether to wait and reload or to report it.
+
+## D-027: Findings are derived, never listed (2026-10-17)
+
+**Context.** The project's results — values withdrawn by a source, two channels
+disagreeing, a series quietly discontinued — were visible only to someone who clicked
+into the right dataset and read a note. The obvious fix is a "highlights" list on the
+front page.
+
+**Decision.** `/api/client/findings` builds the list from the records: open exceptions
+carrying a root cause, withdrawn values in `pit."<id>"`, `value_differs` counts in
+`recon."<id>"`. Each finding carries a number, a short label, the dataset, and where one
+exists the date to replay the series at. The page renders them as buttons that select the
+dataset and set that date.
+
+**Why not a written list.** A hand-written highlights panel is the most tempting thing in
+the project to write by hand and the worst thing to get wrong: it is the page that makes
+claims. It would be correct the day it was written, and would keep asserting "744 values
+are missing" after the source restored them, or after someone accepted the loss. Deriving
+means a finding appears because a control caught something and leaves when it is closed,
+and the numbers in the sentence are the numbers in the table.
+
+**A finding requires a human judgement first.** A withdrawal only becomes a finding once
+its exception has a root cause of `source_data_error`. Until someone has looked, it is an
+open question, not a result, and the front page does not claim it.
+
+**Choosing the replay date.** The date offered is the day of the *largest* withdrawal
+event, not the first. Replaying archived copies finds old single-value removals going
+back years, so the earliest moment proves nothing. It is the day of that event rather
+than the day before, because replay is as at midnight and the build that removed the
+values landed hours into the day; the previous day is used only when the event is stamped
+exactly midnight, which leaves no room inside its own day.
+
+**Consequence.** A finding can vanish between deploys, which is the intent. The wording
+lives next to the numbers in `data.py` rather than in the page, so a sentence cannot
+quote a figure the query did not produce.
+
+## D-028: The browser becomes a column when there is room (2026-10-17)
+
+**Context.** The catalogue is 29 cards. In the single-column layout it occupied an entire
+laptop viewport, putting the chart below the fold.
+
+**Decision.** Above 1100 px the page is a two-column grid: a sticky browse panel whose
+dataset list scrolls inside itself, and a detail column holding the chart and everything
+below it, with the findings band spanning both. Below 1100 px the layout is unchanged.
+
+**Why a breakpoint and not a collapse.** Hiding the catalogue behind a toggle would fix
+the height on every screen and make browsing worse on all of them. The problem is only
+present where vertical space is scarce relative to horizontal, which is exactly what a
+media query describes.
+
+**Consequence.** The maximum page width goes from 1280 px to 1560 px so two columns fit,
+which makes prose lines too long; the prose panels are capped with `max-width` in `ch`.
+The sidebar hides the card tags, so that information exists only in the detail panel on
+wide screens — acceptable, because the detail panel is always on screen beside it.
