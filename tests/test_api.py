@@ -114,6 +114,47 @@ def test_a_passing_publication_gives_no_reasons(client):
     assert (wti["quality_status"], wti["quality_reasons"]) == ("pass", [])
 
 
+def test_provenance_describes_the_source_and_the_files_kept(client):
+    """The client page answers "where did this number come from" without a human."""
+    p = client.get("/api/client/datasets/eia_wti_spot/provenance").json()
+    assert p["provider"]["name"] == "U.S. Energy Information Administration"
+    assert p["provider"]["terms_url"].startswith("https://")
+    assert p["provider"]["attribution"]
+    assert p["request"]["url"] == WTI.source.url
+    assert p["request"]["series_key"] == "RWTC"
+    assert p["request"]["format"] == "Excel spreadsheet (one series per file)"
+    assert p["request"]["partitioned_by"] is None
+    # The raw zone is the evidence, so the page can show it rather than assert lineage.
+    assert p["files"]["count"] == 1
+    (newest,) = p["files"]["newest"]
+    assert newest["name"].endswith(".xls")
+    assert len(newest["sha256_short"]) == 16
+    assert newest["origin"] == "direct"
+    assert client.get("/api/client/datasets/eia_us_gas_storage/provenance").status_code == 404
+
+
+def test_provenance_keeps_a_partitioned_url_as_a_template(tmp_path):
+    """No single URL covers a partitioned dataset, so the placeholder is the answer."""
+    from merx.api import data
+    from merx.contracts import load_contract
+    from merx.reference import load_reference
+
+    cftc = load_contract(CONTRACTS_DIR / "cftc_wti_positions.yaml")
+    p = data.provenance(data.Store(tmp_path), cftc, load_reference())
+    assert "{year}" in p["request"]["url"]
+    assert (p["request"]["partitioned_by"], p["request"]["partitions_from"]) == ("year", "2010")
+    assert p["provider"]["name"] == "U.S. Commodity Futures Trading Commission"
+    # Nothing has been downloaded into this empty store, and that reads as zero rather
+    # than as a missing key.
+    assert p["files"] == {"count": 0, "bytes": 0, "first_utc": None, "by_origin": {}, "newest": []}
+
+
+def test_the_schedule_is_given_in_words(client):
+    p = client.get("/api/client/datasets/eia_wti_spot/provenance").json()
+    assert p["schedule"]["in_words"] == "every weekday at 18:30 America/New_York"
+    assert p["schedule"]["cron"] == WTI.schedule.cron
+
+
 def test_pages_and_assets_are_served(client):
     assert "operations console" in client.get("/ops").text
     assert "published commodity data" in client.get("/client").text

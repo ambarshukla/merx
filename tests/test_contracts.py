@@ -105,17 +105,44 @@ def test_crosswalk_resolves_cftc_market_by_code_not_name():
     assert reference.resolve("cftc", "067651").instrument_id == "WTI_NYMEX_FUTURES"
 
 
-def test_reference_rejects_crosswalk_to_unknown_instrument(tmp_path):
-    for name in ("units.csv", "instruments.csv"):
+def reference_copy(tmp_path: Path, **replace: str) -> Path:
+    """The repository's reference files, with any one of them replaced."""
+    for name in ("units.csv", "instruments.csv", "crosswalk.csv", "providers.csv"):
         (tmp_path / name).write_text(
-            (Path(__file__).parents[1] / "reference" / name).read_text(encoding="utf-8"),
+            replace.get(name.removesuffix(".csv"))
+            or (Path(__file__).parents[1] / "reference" / name).read_text(encoding="utf-8"),
             encoding="utf-8",
         )
-    (tmp_path / "crosswalk.csv").write_text(
-        "provider,source_key,instrument_id,source_label,note\neia,X,NOPE,x,\n", encoding="utf-8"
-    )
+    return tmp_path
+
+
+CROSSWALK = """provider,source_key,instrument_id,source_label,note
+{row}
+"""
+
+
+def test_reference_rejects_crosswalk_to_unknown_instrument(tmp_path):
+    directory = reference_copy(tmp_path, crosswalk=CROSSWALK.format(row="eia,X,NOPE,x,"))
     with pytest.raises(ReferenceError, match="unknown instrument NOPE"):
-        load_reference(tmp_path)
+        load_reference(directory)
+
+
+def test_reference_rejects_a_source_whose_publisher_is_not_described(tmp_path):
+    """Nothing is published from a source whose terms have not been recorded, so a
+    provider with no entry in providers.csv is an error, not a blank space on the page."""
+    directory = reference_copy(
+        tmp_path, crosswalk=CROSSWALK.format(row="nobody,X,WTI_CUSHING_SPOT,x,")
+    )
+    with pytest.raises(ReferenceError, match="providers.csv does not describe"):
+        load_reference(directory)
+
+
+def test_every_provider_a_contract_uses_is_described():
+    reference = load_reference()
+    for contract in load_contracts(reference):
+        provider = reference.providers[contract.source.provider]
+        assert provider.name and provider.terms and provider.terms_url
+        assert provider.attribution
 
 
 def test_single_series_format_needs_exactly_one_measure(tmp_path):
