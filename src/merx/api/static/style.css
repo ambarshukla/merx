@@ -118,20 +118,6 @@ code { font-size: 12px; }
   padding: 1px 6px; color: var(--muted); white-space: nowrap;
 }
 
-/* --- the explain affordance ----------------------------------------------------- */
-.explained { position: relative; }
-.explain-mark {
-  border: 1px solid var(--line); background: var(--panel); color: var(--muted);
-  border-radius: 999px; width: 16px; height: 16px; line-height: 1; padding: 0;
-  font-size: 11px; cursor: help; margin-left: 5px; vertical-align: middle;
-}
-.explain-mark:hover, .explain-mark:focus { border-color: var(--accent); color: var(--accent); }
-.explain-pop {
-  position: absolute; z-index: 40; background: var(--panel); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
-  box-shadow: 0 6px 24px rgba(0,0,0,.18); font-size: 13px; line-height: 1.5;
-}
-.explain-pop p { margin: 6px 0 0; }
 .concept { border-top: 1px solid var(--line); padding: 7px 0; }
 .concept:first-child { border-top: 0; }
 .concept summary { cursor: pointer; }

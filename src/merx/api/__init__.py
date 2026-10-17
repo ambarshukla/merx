@@ -125,6 +125,10 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
             "points": data.series_as_known_at(store, c, m, at),
         }
 
+    @app.get("/api/client/datasets/{dataset}/provenance")
+    def client_provenance(dataset: str):
+        return data.provenance(store, published(dataset), reference)
+
     @app.get("/api/client/sources")
     def client_sources():
         return data.reconciled_pairs(store, contracts)

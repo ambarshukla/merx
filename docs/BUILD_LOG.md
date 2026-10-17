@@ -656,3 +656,46 @@ gate doing its job, not a broken backfill.
 
 `--dry-run` prints the partitions and stops; an unknown partition is refused with the
 range the contract actually covers.
+
+## "About this data" says where the data came from (2026-10-17)
+
+Two changes to the client page, both about the same thing: putting the useful
+information where someone is looking, and taking away what was getting in the way.
+
+**The "?" markers are gone.** Every explained term in the running text carried a small
+question mark that opened a popover. The glossary behind them was worth having; the
+markers were not. A paragraph speckled with them interrupts the reading they were meant
+to support, and the eye goes to the markers rather than the sentence. The same
+explanations are still on the page, as one list at the bottom, where someone who wants
+them can read them straight through. The popover and its stylesheet rules are deleted
+rather than hidden.
+
+**"About this data" is now about *this* data.** It used to be three paragraphs of
+boilerplate, identical for all 29 datasets, listing every source the project uses. It
+now answers, for the series on screen: who publishes it, how it is reached, the exact
+request URL (with its `{year}` or `{from}`/`{to}` placeholders intact, because for a
+partitioned source no single URL is the truth), the file format, the series key within
+that file and which columns are read, when it is fetched in words as well as cron, how
+many raw files are kept and how large they are, the newest few by name with their size,
+fetch time and checksum prefix, and the licence with a link and the credit line it asks
+for.
+
+Downloaded files and copies imported from the Wayback Machine are counted separately. A
+WTI download from today and an archive capture from 2010 are both evidence, but of
+different things, and adding them together would make the raw zone look older than it
+is.
+
+None of it is written by hand. It is read from the contract and from
+`meta.raw_manifest`, so it cannot drift away from what the pipeline actually does — the
+failure mode of every hand-written provenance page.
+
+**Providers became reference data.** `reference/providers.csv` holds each publisher's
+name, access method, terms, terms URL and attribution, loaded and cross-checked like
+instruments and units: a crosswalk entry naming a provider that `providers.csv` does not
+describe now fails at load. That is the same rule as the licence policy, enforced by the
+loader rather than by memory — nothing is published from a source whose terms are not
+recorded, so a source with no record cannot reach the page at all.
+
+The boilerplate that was genuinely general — what the published layer is, what "as known
+on" means, that every download is kept — moved into its own panel, "How this site treats
+the data", where it belongs.

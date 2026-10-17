@@ -576,3 +576,61 @@ build's check results are later pruned; the check's name still appears.
 putting the reasons only on the operations console (leaves the user who sees the badge
 without the answer); storing a frozen description inside `meta.publications` (duplicates
 `ops.check_results` for a rare case).
+
+## D-023: Provenance is derived, and publishers are reference data (2026-10-17)
+
+**Context.** The client console's "About this data" panel was static prose, the same for
+every dataset: a list of all the project's sources and some general notes. A user looking
+at one series could not find out where that series came from, how it was fetched, or what
+its licence asked of them.
+
+**Decision.** `/api/client/datasets/{id}/provenance` returns the publisher, the request
+(URL template, format, series key, columns, whether a key is needed), the schedule in
+words, the counts and newest entries of the raw zone for that dataset, and the terms and
+attribution. The page renders it per dataset.
+
+Everything is **derived**: the request and schedule from the contract, the files from
+`meta.raw_manifest`. Nothing about provenance is written out by hand in the page.
+
+Publishers move into reference data as `reference/providers.csv` (name, access, terms,
+terms URL, attribution), loaded and cross-checked alongside instruments, units and the
+crosswalk. A crosswalk entry whose provider has no row there is a load error.
+
+**Why.** A hand-written provenance page is correct on the day it is written and wrong
+soon after, because nothing makes it move when the pipeline does. Deriving it from the
+contract and the manifest means the page cannot claim a URL the engine does not call or a
+file count the raw zone does not hold. Making the publisher's terms a load-time
+requirement puts the project's own licence rule — nothing is published from a source whose
+terms have not been read — into the loader, where it is enforced rather than remembered.
+
+**Consequence.** Adding a source now means adding a row to `providers.csv`, and the
+build fails until it is there. The URL shown for a partitioned source keeps its
+placeholders, which is accurate but needs the one-line explanation the page gives.
+
+**Alternatives rejected.** Keeping the prose and editing it per source (drifts, and
+nothing catches the drift); generating the panel from `docs/PROVENANCE.md` (prose is a
+poor machine format, and the document is deliberately a narrative record); showing the
+whole raw manifest (hundreds of rows for the older datasets, when the newest few plus
+counts is what anyone needs).
+
+## D-024: The per-term "?" markers are removed (2026-10-17)
+
+**Context.** Terms in the running text of the client page carried a "?" marker opening a
+popover explanation. The explanations are genuinely useful: the site is meant to be
+readable by someone who knows neither commodities nor data engineering.
+
+**Decision.** The markers and the popover are removed. The explanations stay, rendered as
+one expandable list in the "What the words mean" panel, ordered so the terms relevant to
+the selected dataset come first.
+
+**Why.** The markers competed with the text they annotated. A paragraph carrying four of
+them reads as a page of footnote numbers rather than a sentence, and the reader's eye
+goes to the markers. The explanation is worth offering, but not at the cost of the thing
+being explained. One list, in one place, costs a reader who wants it a scroll, and costs
+a reader who does not want it nothing.
+
+**Consequence.** A term used in the running text is no longer linked to its explanation,
+so the glossary has to be findable on its own — hence keeping it on the page rather than
+behind a link, and ordering it by relevance to the current dataset. A test asserts that no
+page marks terms and that the stylesheet carries no marker rules, so the affordance cannot
+return by half.

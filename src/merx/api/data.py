@@ -594,3 +594,144 @@ def two_sources(store: Store, contract: Contract, other: Contract) -> dict:
         ],
         "removals": timeline,
     }
+
+
+# --- provenance: where a dataset's numbers actually came from ---------------------------
+
+# What each source format is, in words, for people who will never read the parser.
+_FORMAT = {
+    "eia_hist_xls": "Excel spreadsheet (one series per file)",
+    "eia_api_v2": "JSON API, version 2",
+    "cftc_disaggregated": "ZIP archive holding the disaggregated Commitments of Traders report",
+    "elexon_mid": "JSON API, market index data",
+    "carbon_intensity": "JSON API, carbon intensity",
+    "worldbank_pink_sheet": "Excel spreadsheet (many series; one column is read)",
+}
+
+_FREQUENCY_WORDS = {
+    "half_hourly": "every half hour",
+    "hourly": "every hour",
+    "daily": "every weekday",
+    "weekly": "weekly",
+    "monthly": "monthly",
+    "annual": "yearly",
+}
+
+_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def schedule_in_words(contract: Contract) -> str:
+    """A contract's cron schedule as a sentence. Only the fields the contracts use."""
+    minute, hour, _dom, _mon, dow = contract.schedule.cron.split()
+    if dow == "*":
+        when = "every day"
+    else:
+        names = [_DAYS[(int(d) - 1) % 7] for part in dow.split(",") for d in _expand(part)]
+        when = "every " + ("weekday" if names == _DAYS[:5] else ", ".join(names))
+    return f"{when} at {int(hour):02d}:{int(minute):02d} {contract.schedule.timezone}"
+
+
+def _expand(part: str) -> list[str]:
+    if "-" not in part:
+        return [part]
+    lo, hi = (int(x) for x in part.split("-"))
+    return [str(d) for d in range(lo, hi + 1)]
+
+
+def raw_files(store: Store, contract: Contract, limit: int = 8) -> dict:
+    """Every download kept for this dataset: how many, how large, and the newest few.
+
+    The raw zone is the evidence behind every published number, so the client page can
+    show it rather than asking anyone to take the lineage on trust. Names are shown as
+    the file is stored, which is how it would be found on disk.
+    """
+    empty = {"count": 0, "bytes": 0, "first_utc": None, "by_origin": {}, "newest": []}
+    if not store.has("meta", "raw_manifest"):
+        return empty
+    (count, total, first) = store.query(
+        "SELECT count(*), coalesce(sum(bytes), 0), min(fetched_at_utc) "
+        "FROM meta.raw_manifest WHERE dataset_id = ?",
+        [contract.id],
+    )[0]
+    # Downloads this project made and copies imported from the archive are both kept,
+    # but they are different evidence: an archived copy is dated by when the archive
+    # captured it, which is years before this project existed. Counting them together
+    # would make the raw zone look older than it is.
+    by_origin = {
+        origin: {"count": n, "bytes": size, "first_utc": _iso(since)}
+        for origin, n, size, since in store.query(
+            "SELECT origin, count(*), coalesce(sum(bytes), 0), min(fetched_at_utc) "
+            "FROM meta.raw_manifest WHERE dataset_id = ? GROUP BY 1 ORDER BY 1",
+            [contract.id],
+        )
+    }
+    rows = store.query(
+        "SELECT path, url, fetched_at_utc, bytes, sha256, http_status, last_modified, "
+        "partition, origin, archive_url FROM meta.raw_manifest WHERE dataset_id = ? "
+        "ORDER BY fetched_at_utc DESC LIMIT ?",
+        [contract.id, limit],
+    )
+    newest = rows_as_dicts(
+        rows,
+        ["path", "url", "fetched_at_utc", "bytes", "sha256", "http_status",
+         "last_modified", "partition", "origin", "archive_url"],
+    )  # fmt: skip
+    for f in newest:
+        f["name"] = f["path"].rsplit("/", 1)[-1]
+        f["fetched_at_utc"] = _iso(f["fetched_at_utc"])
+        # The full digest is not useful on a page; enough of it to compare by eye is.
+        f["sha256_short"] = (f.pop("sha256") or "")[:16]
+    return {
+        "count": count,
+        "bytes": total,
+        "first_utc": _iso(first),
+        "by_origin": by_origin,
+        "newest": newest,
+    }
+
+
+def provenance(store: Store, contract: Contract, reference: Reference) -> dict:
+    """Where this dataset comes from: publisher, terms, request, files, schedule.
+
+    Everything here is already true of the pipeline — it is read from the contract and
+    from the raw zone's manifest rather than written out by hand, so it cannot drift
+    away from what the engine actually does.
+    """
+    source = contract.source
+    provider = reference.providers.get(source.provider)
+    partitions = source.partitions
+    return {
+        "dataset": contract.id,
+        "provider": {
+            "id": source.provider,
+            "name": provider.name if provider else source.provider,
+            "access": provider.access if provider else "",
+            "terms": provider.terms if provider else "",
+            "terms_url": provider.terms_url if provider else "",
+            "attribution": provider.attribution if provider else "",
+        },
+        "request": {
+            # The template is the honest answer for a partitioned source: no single URL
+            # covers the dataset, and the placeholders are the point.
+            "url": source.url,
+            "format": _FORMAT.get(source.format, source.format),
+            "format_id": source.format,
+            "series_key": source.series_key,
+            "needs_key": source.api_key_env is not None,
+            "partitioned_by": partitions.by if partitions is not None else None,
+            "partitions_from": str(partitions.start) if partitions is not None else None,
+            "columns": source.columns,
+        },
+        "schedule": {
+            "in_words": schedule_in_words(contract),
+            "cron": contract.schedule.cron,
+            "timezone": contract.schedule.timezone,
+            "frequency": _FREQUENCY_WORDS.get(contract.frequency, contract.frequency),
+        },
+        "archive_backfill": source.archive_backfill,
+        "archive_provider": reference.providers["internet_archive"].name
+        if source.archive_backfill and "internet_archive" in reference.providers
+        else None,
+        "tier": contract.tier,
+        "files": raw_files(store, contract),
+    }

@@ -165,7 +165,7 @@ merx serve                                       # the consoles, on port 8000
 | Path | What it holds |
 |---|---|
 | `contracts/` | One YAML contract per dataset |
-| `reference/` | Instruments, units, and the crosswalk from provider codes to our identifiers |
+| `reference/` | Instruments, units, publishers and their terms, and the crosswalk from provider codes to our identifiers |
 | `src/merx/contracts/` | The contract schema and loader |
 | `src/merx/sources/` | Downloading, and one strict parser per file format (EIA spreadsheets, CFTC yearly zips) |
 | `src/merx/store/` | The raw zone and its manifest; the DuckDB connection |

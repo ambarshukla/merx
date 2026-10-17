@@ -34,6 +34,24 @@ class Unit:
 
 
 @dataclass(frozen=True)
+class Provider:
+    """Who publishes a source, how it is reached, and on what terms.
+
+    The terms are the short form; ``docs/PROVENANCE.md`` holds the full record of what
+    was read and when. Keeping them here as data means the client site can show, next to
+    any series, where the numbers came from and what the licence asks of a user — which
+    is the part of provenance that people actually need at the point of use.
+    """
+
+    provider_id: str
+    name: str
+    access: str
+    terms: str
+    terms_url: str
+    attribution: str
+
+
+@dataclass(frozen=True)
 class CrosswalkEntry:
     provider: str
     source_key: str
@@ -47,6 +65,7 @@ class Reference:
     instruments: dict[str, Instrument]
     units: dict[str, Unit]
     crosswalk: dict[tuple[str, str], CrosswalkEntry]
+    providers: dict[str, Provider]
 
     def resolve(self, provider: str, source_key: str) -> Instrument:
         """The instrument a provider's identifier maps to. Raises if it is not mapped."""
@@ -91,6 +110,11 @@ def load_reference(directory: Path = REFERENCE_DIR) -> Reference:
         lambda c: (c.provider, c.source_key),
         "crosswalk key",
     )
+    providers = _unique_index(
+        [Provider(**r) for r in _rows(directory / "providers.csv")],
+        lambda p: p.provider_id,
+        "provider",
+    )
     for inst in instruments.values():
         if inst.unit not in units:
             raise ReferenceError(f"instrument {inst.instrument_id} has unknown unit {inst.unit}")
@@ -100,4 +124,11 @@ def load_reference(directory: Path = REFERENCE_DIR) -> Reference:
                 f"crosswalk {entry.provider}:{entry.source_key} points at unknown "
                 f"instrument {entry.instrument_id}"
             )
-    return Reference(instruments=instruments, units=units, crosswalk=crosswalk)
+        # A source whose terms are not recorded cannot be described to a user, which is
+        # the same reason nothing is published from an unread licence.
+        if entry.provider not in providers:
+            raise ReferenceError(
+                f"crosswalk {entry.provider}:{entry.source_key} names provider "
+                f"{entry.provider!r}, which providers.csv does not describe"
+            )
+    return Reference(instruments=instruments, units=units, crosswalk=crosswalk, providers=providers)

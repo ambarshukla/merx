@@ -40,6 +40,13 @@ names that appear belong to their owners and are used only to identify public so
 "To be confirmed" means the terms have not yet been read and recorded here. Until they
 are, nothing derived from that source is published.
 
+The short form of each row above is also carried as data, in
+[`reference/providers.csv`](../reference/providers.csv), so the client console can show a
+series' publisher, access method, terms and credit line beside the series itself. The
+reference loader refuses to start if a source names a publisher that file does not
+describe, which makes the rule above enforced rather than remembered. This table stays the
+full record of what was read and when.
+
 ## Sources deliberately not used
 
 Being able to say what was left out, and why, is part of handling data responsibly.

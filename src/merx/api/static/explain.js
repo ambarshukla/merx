@@ -1,10 +1,11 @@
 "use strict";
 // Plain-English explanations of the words this site uses.
 //
-// Any element marked data-explain="key" gets a small marker; hovering, focusing or
-// tapping it shows the explanation. A page with a #concepts element also gets the
-// whole list rendered into it, so the terms can be read straight through rather than
-// hunted for.
+// They are rendered into a page's #concepts element as one readable list. There used to
+// be a "?" marker beside every term in the running text as well; it was dropped because
+// a page speckled with markers interrupts the reading it was meant to support. The
+// explanations are the same, in one place, where someone who wants them can read them
+// straight through.
 //
 // The wording assumes no knowledge of commodities or data engineering, which is the
 // point: a data product that cannot explain itself is only usable by the people who
@@ -179,73 +180,6 @@ const EXPLAIN = {
   },
 };
 
-// Attaches the "?" markers. Safe to call again after part of the page is rebuilt:
-// elements that already carry a marker are left alone.
-let attachMarkers = function () {};
-
-function explainPopover() {
-  const box = document.createElement("div");
-  box.className = "explain-pop";
-  box.hidden = true;
-  document.body.appendChild(box);
-  let openFor = null;
-
-  function show(anchor, key) {
-    const term = EXPLAIN[key];
-    if (!term) return;
-    box.innerHTML = `<b>${term.title}</b><p>${term.long}</p>`;
-    box.hidden = false;
-    const r = anchor.getBoundingClientRect();
-    const width = Math.min(360, window.innerWidth - 24);
-    box.style.width = width + "px";
-    let left = r.left + window.scrollX;
-    left = Math.min(left, window.scrollX + window.innerWidth - width - 12);
-    box.style.left = Math.max(window.scrollX + 12, left) + "px";
-    box.style.top = r.bottom + window.scrollY + 6 + "px";
-    openFor = anchor;
-  }
-
-  function hide() {
-    box.hidden = true;
-    openFor = null;
-  }
-
-  attachMarkers = function () {
-    document.querySelectorAll("[data-explain]").forEach((el) => {
-      const key = el.dataset.explain;
-      const term = EXPLAIN[key];
-      if (!term || el.classList.contains("explained")) return;
-      el.classList.add("explained");
-      const mark = document.createElement("button");
-      mark.className = "explain-mark";
-      mark.type = "button";
-      mark.textContent = "?";
-      mark.setAttribute("aria-label", `What is ${term.title}?`);
-      mark.title = term.short;
-      el.appendChild(mark);
-      mark.addEventListener("mouseenter", () => show(mark, key));
-      mark.addEventListener("focus", () => show(mark, key));
-      mark.addEventListener("mouseleave", () => {
-        if (!box.matches(":hover")) hide();
-      });
-      mark.addEventListener("blur", hide);
-      mark.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (openFor === mark) hide();
-        else show(mark, key);
-      });
-    });
-  };
-
-  attachMarkers();
-  box.addEventListener("mouseleave", hide);
-}
-
-// Pages that rebuild part of themselves call this to mark the new content.
-function explainAgain() {
-  attachMarkers();
-}
-
 // Renders every concept as an expandable list, in the order given.
 function renderConcepts(target, keys) {
   const el = typeof target === "string" ? document.getElementById(target) : target;
@@ -260,4 +194,3 @@ function renderConcepts(target, keys) {
     .join("");
 }
 
-document.addEventListener("DOMContentLoaded", explainPopover);

@@ -15,7 +15,7 @@
   <section class="panel">
     <div class="row" style="justify-content: space-between; align-items: flex-start">
       <div>
-        <h2 style="margin:0 0 3px"><span data-explain="sector">Browse by sector</span></h2>
+        <h2 style="margin:0 0 3px">Browse by sector</h2>
         <div class="small muted" id="catalog-count"></div>
       </div>
       <label class="small muted">Show
@@ -44,7 +44,7 @@
         <button data-years="1">1Y</button><button data-years="5">5Y</button>
         <button data-years="15">15Y</button><button data-years="0">All</button>
       </span>
-      <label><span data-explain="as-known-on">As known on</span>
+      <label>As known on
         <input type="date" id="asof"></label>
       <span class="small muted" id="presets"></span>
       <button id="clear-asof">Clear</button>
@@ -55,36 +55,42 @@
     <div class="small muted" id="series-note" style="margin-top:6px"></div>
   </section>
 
-  <section class="grid">
-    <div class="panel">
-      <h2><span data-explain="revision">Revisions</span> and
-        <span data-explain="withdrawal">withdrawals</span></h2>
-      <div class="small muted" style="margin-bottom:8px">
-        Values the source has changed or removed since they were first known. Every
-        version is kept; nothing is overwritten.
-      </div>
-      <div id="revisions"></div>
+  <section class="panel">
+    <h2>Revisions and withdrawals</h2>
+    <div class="small muted" style="margin-bottom:8px">
+      Values the source has changed or removed since they were first known. Every
+      version is kept; nothing is overwritten.
     </div>
-    <div class="panel">
-      <h2>About this data</h2>
-      <div class="small">
-        <p>Only the <b>published</b> layer is shown here: data that passed the
-          <span data-explain="publish-gate">publish gate</span>.
-          <span data-explain="tier">Tier</span> 1 series are published only when no
-          critical <span data-explain="check">check</span> fails; other tiers are
-          published marked <span class="badge warn">warn</span>.</p>
-        <p><b>As known on</b> rebuilds the series exactly as it stood on that date, from
-          every version in the history. Before this project began downloading
-          (2026-10-15), versions come from dated copies in the Internet Archive's Wayback
-          Machine, counted from the archive's capture time: an upper bound on when they
-          were public.</p>
-        <p><b>Sources:</b> U.S. Energy Information Administration (EIA); U.S. Commodity
-          Futures Trading Commission (CFTC); Elexon (<i>Contains BMRS data © Elexon
-          Limited copyright and database right 2026</i>); National Grid carbon intensity
-          API (CC BY 4.0); World Bank Commodity Price Data, the Pink Sheet (CC BY 4.0);
-          past copies via the Internet Archive's Wayback Machine. Nothing here is
-          endorsed by any of them. See the project's PROVENANCE document.</p>
-      </div>
+    <div id="revisions"></div>
+  </section>
+
+  <section class="panel">
+    <h2>About this data</h2>
+    <div class="small muted" style="margin-bottom:8px">
+      Where this series actually comes from — the publisher, the request that fetches it,
+      the files kept as evidence, and the terms it is published under. None of it is
+      written out by hand: it is read from the dataset's contract and from the raw zone's
+      manifest, so it cannot drift away from what the pipeline really does.
+    </div>
+    <div id="provenance" class="small"></div>
+  </section>
+
+  <section class="panel">
+    <h2>How this site treats the data</h2>
+    <div class="small">
+      <p>Only the <b>published</b> layer is shown: data that passed the publish gate.
+        Tier 1 series are published only when no critical check fails; other tiers are
+        published marked <span class="badge warn">warn</span>, with the failing checks
+        named beside the badge.</p>
+      <p><b>As known on</b> rebuilds a series exactly as it stood on that date, from
+        every version in the history. Before this project began downloading
+        (2026-10-15), versions come from dated copies in the Internet Archive's Wayback
+        Machine, counted from the archive's capture time: an upper bound on when they
+        were public.</p>
+      <p>Every download is kept, unedited, and everything downstream is rebuilt from
+        those files. Nothing here is endorsed by any of the publishers named. The full
+        record of each source's terms, and of the sources deliberately not used, is in
+        the project's PROVENANCE document.</p>
     </div>
   </section>
 
@@ -92,8 +98,7 @@
     <h2>What the words mean</h2>
     <div class="small muted" style="margin-bottom:8px">
       Every term this page uses, in plain English — the ones relevant to whatever is
-      selected appear first. The <span class="explain-mark" style="cursor:default">?</span>
-      marks around the page show the same explanations where they are used.
+      selected appear first. Click any of them to read more.
     </div>
     <div id="concepts" class="small"></div>
   </section>
@@ -180,6 +185,73 @@ function drawSectors() {
   }));
 }
 
+function bytes(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + " GB";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + " MB";
+  if (n >= 1e3) return Math.round(n / 1e3) + " KB";
+  return n + " bytes";
+}
+
+function rows(pairs) {
+  return `<table><tbody>${pairs.filter(([, v]) => v).map(([k, v]) =>
+    `<tr><th style="width:34%">${esc(k)}</th><td>${v}</td></tr>`).join("")}</tbody></table>`;
+}
+
+async function drawProvenance(id) {
+  const el = document.getElementById("provenance");
+  const p = await getJSON(`/api/client/datasets/${id}/provenance`);
+  if (current.id !== id) return;  // a different dataset was picked while this loaded
+  const r = p.request, f = p.files;
+  const placeholder = r.partitioned_by
+    ? `<div class="muted" style="margin-top:4px">${r.partitioned_by === "year"
+        ? "<code>{year}</code> is replaced by each year from " + esc(r.partitions_from)
+        : "<code>{from}</code> and <code>{to}</code> become the start and end of each "
+          + "month from " + esc(r.partitions_from)}.</div>`
+    : "";
+  const direct = f.by_origin.direct, archived = f.by_origin.archive;
+  const kept = [
+    direct ? `<b>${direct.count}</b> downloaded by this project since
+      ${direct.first_utc.slice(0, 10)} (${bytes(direct.bytes)})` : "",
+    archived ? `<b>${archived.count}</b> past copies imported from
+      ${esc(p.archive_provider || "the Internet Archive")}, captured between
+      ${archived.first_utc.slice(0, 10)} and today (${bytes(archived.bytes)})` : "",
+  ].filter(Boolean).join("<br>");
+
+  el.innerHTML = rows([
+    ["Published by", `<b>${esc(p.provider.name)}</b>
+       <div class="muted">${esc(p.provider.access)}</div>`],
+    ["Request", `<code style="word-break:break-all">${esc(r.url)}</code>${placeholder}
+       ${r.needs_key ? `<div class="muted">Needs a free API key, read from the
+         environment at run time and never stored with the data.</div>` : ""}`],
+    ["File format", esc(r.format)],
+    ["Series within it", `<code>${esc(r.series_key)}</code>` +
+      (r.columns ? `<div class="muted">Columns read: ` +
+        Object.entries(r.columns).map(([m, c]) =>
+          `${esc(m)} ← <code>${esc(c)}</code>`).join(", ") + `</div>` : "")],
+    ["Fetched", `${esc(p.schedule.in_words)}
+       <div class="muted">The source updates ${esc(p.schedule.frequency)};
+         cron <code>${esc(p.schedule.cron)}</code>.</div>`],
+    ["Files kept", kept || "none yet"],
+    ["Newest downloads", f.newest.length ? `<table><thead><tr><th>File</th>
+       <th class="num">Size</th><th>Fetched (UTC)</th><th>Checksum</th></tr></thead><tbody>
+       ${f.newest.map((x) => `<tr>
+         <td style="word-break:break-all"><code>${esc(x.name)}</code>${x.partition
+           ? ` <span class="muted">· ${esc(x.partition)}</span>` : ""}${x.origin === "archive"
+           ? ` <span class="muted">· archived copy</span>` : ""}</td>
+         <td class="num">${bytes(x.bytes)}</td>
+         <td>${esc((x.fetched_at_utc || "").slice(0, 16).replace("T", " "))}</td>
+         <td><code>${esc(x.sha256_short)}</code></td></tr>`).join("")}
+       </tbody></table>
+       <div class="muted">Stored under <code>data/raw/${esc(p.provider.id)}/${esc(id)}/</code>,
+         named by the moment they were fetched and the first bytes of their SHA-256
+         checksum. Nothing edits them.</div>` : ""],
+    ["Terms", `${esc(p.provider.terms)}
+       <div class="muted"><a href="${esc(p.provider.terms_url)}" target="_blank"
+         rel="noopener">${esc(p.provider.terms_url)}</a></div>`],
+    ["Credit", `<i>${esc(p.provider.attribution)}</i>`],
+  ]);
+}
+
 function drawCatalog() {
   const shown = visible();
   document.getElementById("catalog-count").textContent =
@@ -249,8 +321,8 @@ function select(id) {
     why.style.display = "";
     why.innerHTML = `This publication is marked
       <span class="badge warn">${esc(current.quality_status)}</span> because these
-      <span data-explain="check">checks</span> failed when it was published. The data is
-      still published — its <span data-explain="tier">tier</span> allows that — but it is
+      checks failed when it was published. The data is
+      still published — its tier allows that — but it is
       flagged so you can judge it:
       <ul style="margin:6px 0 0">${reasonList(current.quality_reasons)}</ul>`;
   } else why.style.display = "none";
@@ -259,7 +331,7 @@ function select(id) {
     held.style.display = "";
     held.innerHTML = `Newer data for this series is being <b>held back</b>: the latest
       update (${current.latest_attempt_utc.slice(0, 16).replace("T", " ")} UTC) failed a
-      critical <span data-explain="check">check</span> and was not published. What you
+      critical check and was not published. What you
       see is the last publication that passed.
       <ul style="margin:6px 0 0">${reasonList(current.latest_attempt_reasons)}</ul>`;
   } else held.style.display = "none";
@@ -275,9 +347,9 @@ function select(id) {
   // Put the concepts that matter for this dataset at the top of the list.
   const first = CONCEPTS_FOR[current.sector] || [];
   renderConcepts("concepts", [...first, ...ALWAYS.filter((k) => !first.includes(k))]);
-  explainAgain();  // the notes above are rebuilt, so their ? marks have to be re-attached
   drawCatalog();
   draw();
+  drawProvenance(current.id);
 }
 
 async function draw() {
@@ -308,10 +380,8 @@ async function draw() {
   const negatives = pub.points.filter(([, v]) => v !== null && v < 0).length;
   document.getElementById("series-note").innerHTML =
     `${pub.points.length.toLocaleString()} values shown` +
-    (current.sub_daily ? `, one per <span data-explain="settlement-period">settlement period</span>` : "") +
+    (current.sub_daily ? `, one per settlement period` : "") +
     (negatives ? ` · <b>${negatives}</b> below zero, which is real here, not an error` : "");
-  // The note is rebuilt, so its ? marks have to be re-attached.
-  explainAgain();
 
   const rev = await getJSON(`/api/client/series/${current.id}/revisions?measure=${measure}`);
   document.getElementById("revisions").innerHTML = rev.length ? `

@@ -180,14 +180,19 @@ def test_no_two_scripts_are_copies_of_each_other():
 def test_the_explainer_defines_what_the_client_page_needs():
     """Named explicitly, so the guarantee survives a refactor of the generic check."""
     defined = _defined_names((STATIC / "explain.js").read_text(encoding="utf-8"))
-    assert {"renderConcepts", "explainAgain"} <= defined
+    assert "renderConcepts" in defined
 
 
-def test_every_explained_term_on_a_page_has_an_explanation():
-    """A data-explain pointing at a term that does not exist renders a dead marker."""
-    terms = set(
-        re.findall(r'"([a-z-]+)":\s*\{', (STATIC / "explain.js").read_text(encoding="utf-8"))
-    )
+def test_no_page_still_asks_for_the_markers_that_were_removed():
+    """The per-term "?" markers were dropped: they interrupted the text they explained.
+
+    The glossary they opened is still rendered, as one readable list. A page left
+    marking terms would be asking for an affordance that no longer exists, and a marker
+    rule left in the stylesheet would be dead weight.
+    """
     for page in PAGES:
-        used = set(re.findall(r'data-explain="([^"]+)"', page.read_text(encoding="utf-8")))
-        assert used <= terms, f"{page.name} explains {sorted(used - terms)}, which is not defined"
+        body = page.read_text(encoding="utf-8")
+        assert "data-explain" not in body, f"{page.name} still marks terms"
+        assert "explainAgain" not in body, f"{page.name} still re-attaches markers"
+    style = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert "explain-mark" not in style and "explain-pop" not in style
