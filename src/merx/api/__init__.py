@@ -110,6 +110,11 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         return data.lab_headline(store)
 
     # --- client: published data only ----------------------------------------------
+    @app.get("/api/client/findings")
+    @one_connection
+    def client_findings():
+        return data.findings(store, contracts)
+
     @app.get("/api/client/datasets")
     @one_connection
     def client_datasets():
@@ -163,7 +168,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         c = contract(dataset)
         if c.reconcile_with is None:
             raise HTTPException(404, f"{dataset} is not reconciled with a second channel")
-        return data.two_sources(store, c, by_id[c.reconcile_with.dataset])
+        return data.two_sources(store, c, by_id[c.reconcile_with.dataset], reference)
 
     @app.get("/api/client/series/{dataset}/revisions")
     @one_connection

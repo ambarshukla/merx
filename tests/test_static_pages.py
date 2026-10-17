@@ -225,3 +225,24 @@ def test_a_page_that_cannot_load_says_so_in_its_own_voice():
     assert "<pre>" not in body
     assert "could not load its data" in body
     assert "location.reload()" in body, "a failure should offer a way out of itself"
+
+
+def test_the_client_page_leads_with_what_the_checks_caught():
+    """The findings band is the first thing in the page, not buried below the catalogue."""
+    body = (STATIC / "client.html").read_text(encoding="utf-8")
+    main = body[body.index("<main") :]
+    assert main.index('id="findings-panel"') < main.index('class="panel browse"')
+    assert "What the checks caught" in body
+    assert 'id="findings"' in body
+
+
+def test_the_browser_moves_aside_where_there_is_room():
+    """29 cards in one column fill a laptop screen and push the chart below the fold."""
+    body = (STATIC / "client.html").read_text(encoding="utf-8")
+    style = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert 'class="panel browse"' in body and 'class="detail"' in body
+    assert "@media (min-width: 1100px)" in style
+    wide = style[style.index("@media (min-width: 1100px)") :]
+    assert "main.explorer" in wide, "the two-column layout is for wide screens only"
+    # A flex child only scrolls if it is allowed to be smaller than its content.
+    assert "min-height: 0" in wide

@@ -770,3 +770,70 @@ Both states were checked by loading the real page in jsdom against a local serve
 seventeen placeholder shapes at parse, cards at 400 ms, chart and provenance by 1.2 s,
 `data-loading` gone; and with 700 ms of artificial latency per call, the placeholders
 correctly stay up longer.
+
+## Leading with what the checks caught (2026-10-17)
+
+The site held several real findings and told no one. A visitor landed on the catalogue,
+saw 29 datasets and a chart, and had to click into WTI and read a note before learning
+that anything had ever been caught. The page now opens with a band of them:
+
+```
+ 3,401  published prices the source later removed      caught by the no withdrawals check
+    12  months where two institutions disagree         caught by the reconciliation check
+     3  values differ between one publisher's own      caught by the reconciliation check
+       two channels
+   925  days since this source last published          caught by the freshness check
+```
+
+Each is a button. Clicking it selects the dataset **and sets the replay date to a day
+when the missing values were still being published**, so the chart redraws with the lost
+history visible and the note underneath says how many values were known then. The claim
+and its evidence are one click apart.
+
+**No finding is written down anywhere.** They are derived from the same records the
+operations console shows — open exceptions with a root cause, withdrawn values in the
+point-in-time history, break counts in the reconciliation tables. A finding appears
+because a control caught something and disappears when the thing is closed; its numbers
+cannot disagree with the numbers behind it, because they are the same read. A test pins
+both halves: a clean pipeline reports nothing, and closing the exception removes the
+finding.
+
+Choosing the replay date needed care. A series has many withdrawal moments — replaying
+archived copies finds old ones, one value at a time, going back years — so "the first
+one" pointed at 2014 and proved nothing. The date comes from the **largest** removal, and
+it is the day that removal was noticed rather than the day before it: a series is
+replayed as at midnight, and the build that dropped the values landed hours into the day,
+so midnight still sees the complete copy. Stepping back a whole day would break a dataset
+whose history begins on the same day it first lost something.
+
+Verified against the real history, all three series:
+
+| | replayed at | then | published now |
+|---|---|---|---|
+| Henry Hub | 2026-10-15 | 7,359 | 5,709 |
+| Brent | 2026-09-17 | 9,963 | 9,108 |
+| WTI | 2026-10-11 | 10,236 | 9,523 |
+
+## The catalogue moved out of the way (2026-10-17)
+
+29 dataset cards in a four-column grid take about 950 px. On a laptop screen that is the
+entire viewport: the chart — the thing anyone came for — began below the fold, and the
+page read as a wall of boxes.
+
+A wide screen has horizontal room going spare, so above 1100 px the browser becomes a
+column of its own: a sticky panel holding the sector chips and the dataset list, which
+scrolls inside itself, with the findings band across the top and the chart beside it. The
+cards drop their tags there, since the detail panel repeats all of them anyway and in a
+280 px column they wrap into a mess; the quality badge stays, because that is the one
+worth seeing in a list. Below 1100 px nothing changes and it stacks as before.
+
+Two details that are easy to get wrong: a sticky flex column needs `min-height: 0` on the
+scrolling child or it grows instead of scrolling, and prose in a 1,200 px column needs a
+`max-width` or it runs to unreadable line lengths.
+
+**Also fixed: the Two sources page was describing the wrong comparison.** Its labels were
+written for two channels of one publisher — "Only in the spreadsheet", "Dropped from the
+spreadsheet… still in the API" — and the World Bank against EIA is not that. Where the
+tolerance is zero and the alignment exact, the channel wording stays; otherwise the
+labels name the two publishers and the tolerance: *"Only World Bank Commodity Markets
+publishes this period"*, *"Both publish it, and they differ by more than 1.0 USD/bbl"*.

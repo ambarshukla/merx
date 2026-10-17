@@ -33,9 +33,14 @@ breaks, and the detector scores.
 ![Operations console](docs/img/ops-console.png)
 
 **Data** (`/client`): published series only, with quality status, a note when newer
-data is held back, and **"as known on"**: the series as it stood on any past date. Below,
-US crude stocks as known on 2016-06-01 (dashed) against today: the 2016 redefinition
-of the whole history.
+data is held back, and **"as known on"**: the series as it stood on any past date. It
+opens with **what the checks caught** — values a source withdrew, two channels of one
+publisher disagreeing, a series that quietly stopped. Each is a button that selects the
+dataset and sets the replay date to a day when the missing values were still being
+published, so the claim and its evidence are one click apart. Nothing in that band is
+written by hand: it is read from the exceptions, the history and the reconciliation
+tables, and a finding disappears when the matter is closed. Below, US crude stocks as
+known on 2016-06-01 (dashed) against today: the 2016 redefinition of the whole history.
 
 ![Client view, as known on 2016-06-01](docs/img/client-as-known-on.png)
 

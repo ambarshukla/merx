@@ -57,6 +57,7 @@ uses them.
 | **Partition** | One slice of a dataset that is fetched and tracked on its own, such as one year of a source published as yearly files. |
 | **Provenance** | Where a number came from and what happened to it on the way: the publisher, the request that fetched it, the file it arrived in, and the terms it is published under. On the client page it is derived from the contract and the raw manifest, never written by hand. |
 | **Attribution** | The credit line a licence asks to be shown wherever the data is used, such as *Contains BMRS data © Elexon Limited*. Recorded per publisher in `reference/providers.csv` and shown beside every series. |
+| **Finding** | Something a control caught, stated with its number and a link to the evidence. Derived from the exceptions, the history and the reconciliation tables, so it appears when a check catches something and goes when the matter is closed. |
 | **Backfill** | Going back for the older partitions a dataset's routine daily refresh never asks for — when it is first onboarded, when the source republishes an old file, or when a parser is fixed and the files have to be read again. |
 | **PRA (price reporting agency)** | An organisation that assesses physical commodity prices from market evidence, for example Platts or Argus. |
 | **Precision** | Of the values a detector flags, the share that are truly wrong. Low precision means wasted reviewer time. |

@@ -16,7 +16,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import duckdb
@@ -551,7 +551,14 @@ def reconciled_pairs(store: Store, contracts: list[Contract]) -> list[dict]:
     return out
 
 
-def two_sources(store: Store, contract: Contract, other: Contract) -> dict:
+def _publisher(reference: Reference | None, contract: Contract) -> str:
+    provider = (reference.providers if reference else {}).get(contract.source.provider)
+    return provider.name if provider else contract.source.provider
+
+
+def two_sources(
+    store: Store, contract: Contract, other: Contract, reference: Reference | None = None
+) -> dict:
     """Both channels' published series, every difference grouped in plain classes, and
     when the history saw values removed."""
     m = contract.measures[0]
@@ -627,13 +634,30 @@ def two_sources(store: Store, contract: Contract, other: Contract) -> dict:
                         "last_date": _iso(last),
                     }
                 )
-    labels = {
-        "dropped": "Dropped from the spreadsheet: known before, missing now, still in the API",
-        "api_only": "Only ever in the API",
-        "api_fill": "Only in the API, repeating the previous day's value (a holiday fill)",
-        "here_only": "Only in the spreadsheet",
-        "differs": "In both, with different values",
-    }
+    # Two channels of one publisher and two institutions are different comparisons, and
+    # the words have to say which one this is: "only in the spreadsheet" is meaningless
+    # when the other side is the World Bank rather than the same body's API.
+    pair = contract.reconcile_with
+    if pair.tolerance == 0 and pair.align == "exact":
+        labels = {
+            "dropped": "Dropped from the spreadsheet: known before, missing now, still in the API",
+            "api_only": "Only ever in the API",
+            "api_fill": "Only in the API, repeating the previous day's value (a holiday fill)",
+            "here_only": "Only in the spreadsheet",
+            "differs": "In both, with different values",
+        }
+    else:
+        here_name = _publisher(reference, contract)
+        there_name = _publisher(reference, other)
+        labels = {
+            "dropped": f"Withdrawn by {here_name} after having been published",
+            "api_only": f"Only {there_name} publishes this period",
+            "api_fill": f"Only {there_name}, repeating its previous value",
+            "here_only": f"Only {here_name} publishes this period",
+            "differs": (
+                f"Both publish it, and they differ by more than {pair.tolerance} {contract.unit}"
+            ),
+        }
     return {
         "id": contract.id,
         "title": contract.title,
@@ -789,3 +813,217 @@ def provenance(store: Store, contract: Contract, reference: Reference) -> dict:
         "tier": contract.tier,
         "files": raw_files(store, contract),
     }
+
+
+# --- what the controls have actually caught ---------------------------------------------
+
+# A finding is not written down anywhere. It is read out of the same records the
+# operations console shows - exceptions, the point-in-time history, the reconciliation
+# tables - so a finding leaves the page when the thing it describes is fixed, and its
+# numbers cannot drift from the numbers behind it.
+
+
+def _withdrawal_findings(store: Store, by_id: dict[str, Contract], tables: set) -> list[dict]:
+    """Values a source published, then removed, that our history still holds."""
+    if ("ops", "exceptions") not in tables:
+        return []
+    rows = store.query(
+        "SELECT dataset_id FROM ops.exceptions WHERE check_name = 'no_withdrawals' "
+        "AND root_cause = 'source_data_error' AND closed_at_utc IS NULL"
+    )
+    out = []
+    for (dataset_id,) in rows:
+        contract = by_id.get(dataset_id)
+        if contract is None or ("pit", dataset_id) not in tables:
+            continue
+        asof, count = _before_the_largest_removal(store, dataset_id)
+        if not count:
+            continue
+        out.append({"dataset": dataset_id, "title": contract.title, "count": count, "asof": asof})
+    return sorted(out, key=lambda f: -f["count"])
+
+
+def _before_the_largest_removal(store: Store, dataset_id: str) -> tuple[str | None, int]:
+    """A date on which the removed values were still being published, and how many went.
+
+    A series usually has several withdrawal moments: replaying archived copies finds old
+    ones, a single value at a time, going back years. The one worth linking to is the
+    **largest**, which for the EIA spot series is the 2026 event.
+
+    The date returned is the day the removal was noticed, because a series is replayed as
+    at midnight and the build that dropped the values landed some hours into that day —
+    so midnight still sees the older, complete copy. Stepping back a whole day instead
+    would be wrong for a dataset whose history begins on the same day it first lost
+    something: there would be nothing at all to show. A removal recorded exactly at
+    midnight is the one case with no room inside its own day, and only then is the
+    previous day used.
+    """
+    rows = store.query(
+        f'SELECT known_to_utc, count(*) AS n FROM pit."{dataset_id}" '
+        "WHERE ended_by = 'withdrawn' GROUP BY 1 ORDER BY n DESC LIMIT 1"
+    )
+    if not rows:
+        return None, 0
+    when, n = rows[0]
+    midnight_exactly = not (when.hour or when.minute or when.second or when.microsecond)
+    day = when.date() - timedelta(days=1) if midnight_exactly else when.date()
+    return day.isoformat(), n
+
+
+def _disagreement_findings(store: Store, contracts: list[Contract], tables: set) -> list[dict]:
+    """Dates where two sources of one quantity carry different numbers."""
+    out = []
+    for c in contracts:
+        if c.reconcile_with is None or ("recon", c.id) not in tables:
+            continue
+        differs = store.query(
+            f'SELECT count(*) FROM recon."{c.id}" WHERE class = ?', ["value_differs"]
+        )[0][0]
+        if not differs:
+            continue
+        out.append(
+            {
+                "dataset": c.id,
+                "title": c.title,
+                "count": differs,
+                # Two channels of one publisher should agree exactly, so a difference is
+                # a fault. Two institutions need not, so a difference is method.
+                "channels": c.reconcile_with.tolerance == 0 and c.reconcile_with.align == "exact",
+                "tolerance": c.reconcile_with.tolerance,
+                "other": c.reconcile_with.dataset,
+            }
+        )
+    return sorted(out, key=lambda f: -f["count"])
+
+
+def _discontinued_findings(store: Store, by_id: dict[str, Contract], tables: set) -> list[dict]:
+    if ("ops", "exceptions") not in tables:
+        return []
+    rows = store.query(
+        "SELECT dataset_id, last_description FROM ops.exceptions "
+        "WHERE root_cause = 'source_discontinued' AND closed_at_utc IS NULL"
+    )
+    out = []
+    for dataset_id, description in rows:
+        if dataset_id not in by_id or ("published", dataset_id) not in tables:
+            continue
+        (last,) = store.query(f'SELECT max(valid_date) FROM published."{dataset_id}"')[0]
+        out.append(
+            {
+                "dataset": dataset_id,
+                "title": by_id[dataset_id].title,
+                "detail": description,
+                "days": (date.today() - last).days if last else 0,
+                "last_date": _iso(last),
+            }
+        )
+    return out
+
+
+def findings(store: Store, contracts: list[Contract]) -> list[dict]:
+    """The headline results of the controls, largest first.
+
+    Each carries the dataset and, where there is one, the date to replay the series at,
+    so the page can link to the view that proves it rather than asking anyone to take
+    the claim on trust.
+    """
+    tables = store.tables()
+    by_id = {c.id: c for c in contracts}
+    out: list[dict] = []
+
+    removed = _withdrawal_findings(store, by_id, tables)
+    if removed:
+        total = sum(f["count"] for f in removed)
+        biggest = removed[0]
+        others = len(removed) - 1
+        detail = (
+            "Caught by the withdrawal check, which compares every build with what the "
+            f"source told us before. The largest is {biggest['title']} "
+            f"({biggest['count']:,} values)"
+        )
+        if others:
+            detail += f", and {others} other series lost values the same way"
+        detail += (
+            ". A second channel from the same publisher still carries them, so the "
+            "numbers are not gone - they stopped being published."
+        )
+        out.append(
+            {
+                "kind": "withdrawn",
+                "number": f"{total:,}",
+                "label": "published prices the source later removed",
+                "headline": f"{total:,} published prices were removed by the source",
+                "detail": detail,
+                "dataset": biggest["dataset"],
+                "asof": biggest["asof"],
+                "caught_by": "no_withdrawals",
+                "series": [
+                    {
+                        "dataset": f["dataset"],
+                        "title": f["title"],
+                        "count": f["count"],
+                        "asof": f["asof"],
+                    }
+                    for f in removed
+                ],
+            }
+        )
+
+    for f in _disagreement_findings(store, contracts, tables):
+        if f["channels"]:
+            out.append(
+                {
+                    "kind": "channels_differ",
+                    "number": str(f["count"]),
+                    "label": "values differ between one publisher's own two channels",
+                    "headline": (
+                        f"{f['count']} values differ between one publisher's own two channels"
+                    ),
+                    "detail": (
+                        f"{f['title']}: a spreadsheet and an API from the same body, "
+                        "carrying the same number by two routes. They should agree "
+                        "exactly, so where they do not, one of them is wrong."
+                    ),
+                    "dataset": f["dataset"],
+                    "asof": None,
+                    "caught_by": "reconciliation",
+                }
+            )
+        else:
+            out.append(
+                {
+                    "kind": "institutions_differ",
+                    "number": str(f["count"]),
+                    "label": "months where two institutions disagree on one price",
+                    "headline": (
+                        f"{f['count']} months where two institutions disagree on one price"
+                    ),
+                    "detail": (
+                        f"{f['title']}, against the same quantity from another body. "
+                        "Different methods, not a fault - which is why this comparison "
+                        f"allows a difference of {f['tolerance']} and reports only what "
+                        "falls outside it."
+                    ),
+                    "dataset": f["dataset"],
+                    "asof": None,
+                    "caught_by": "reconciliation",
+                }
+            )
+
+    for f in _discontinued_findings(store, by_id, tables):
+        out.append(
+            {
+                "kind": "discontinued",
+                "number": f"{f['days']:,}",
+                "label": "days since this source last published anything",
+                "headline": "A source stopped publishing, without announcing it",
+                "detail": (
+                    f"{f['title']}: {f['detail']}. The freshness check noticed, and it is "
+                    "recorded as discontinued rather than left looking like a failure."
+                ),
+                "dataset": f["dataset"],
+                "asof": None,
+                "caught_by": "freshness",
+            }
+        )
+    return out
