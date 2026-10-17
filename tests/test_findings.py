@@ -140,3 +140,34 @@ def test_the_largest_removal_is_the_one_linked_to(tmp_path, points):
     asof, count = data._before_the_largest_removal(store, "eia_wti_spot")
     assert count == 7, "the bigger of the two removals is the one worth showing"
     assert asof is not None
+
+
+def test_the_count_is_every_value_lost_not_just_the_biggest_loss(tmp_path, points):
+    """A series loses values more than once, and all of them count.
+
+    The replay date comes from the largest removal, because that is the one worth
+    showing. The number must not: reporting the largest event's size would quietly drop
+    every value lost in the smaller ones. On the live site that was the difference
+    between 3,401 and 3,414.
+    """
+    data_dir = tmp_path / "data"
+    run(data_dir, points)
+    run(data_dir, points[:11])  # one value goes
+    run(data_dir, points[:4])  # then seven more
+    con = connect(data_dir)
+    try:
+        ops.ensure_tables(con)
+        for (exception_id,) in con.execute(
+            "SELECT exception_id FROM ops.exceptions WHERE check_name = 'no_withdrawals'"
+        ).fetchall():
+            ops.assign_root_cause(con, exception_id, "source_data_error", "dropped")
+    finally:
+        con.close()
+    client = TestClient(create_app(data_dir))
+    (finding,) = client.get("/api/client/findings").json()
+    assert finding["number"] == "8", "one value plus seven, not seven"
+    assert [s["count"] for s in finding["series"]] == [8]
+    # The date still points at the larger of the two removals.
+    asof, largest = data._before_the_largest_removal(data.Store(data_dir), "eia_wti_spot")
+    assert largest == 7
+    assert finding["asof"] == asof
