@@ -667,3 +667,34 @@ wrapper is correct but slow, which is the right direction for a mistake to fail.
 writer lock); rewriting the catalogue as a single UNION query over every published table
 (fragile, and the per-table schema tolerance would have to be folded in); caching (see
 above).
+
+## D-026: The loading state is markup, not script (2026-10-17)
+
+**Context.** The client page showed empty panels for as long as its data took to arrive.
+The first instinct was a spinner; measuring found a 3.6 s request behind it instead
+(D-025). With that fixed there is still a first paint with no content, and more of one on
+a slow connection.
+
+**Decision.** The placeholder shapes are written into `client.html` and styled in
+`style.css`. `<main>` carries `data-loading` and `aria-busy="true"`, removed once the
+first dataset's chart and provenance have both resolved. The pulse animation is scoped to
+`data-loading` and disabled under `prefers-reduced-motion`.
+
+**Why in the markup.** A skeleton that a script draws cannot appear until the script has
+parsed, run, and reached the drawing call — which is a large share of the delay it exists
+to cover. Markup is on screen at first paint, with no JavaScript involved at all.
+
+**Why wait for the chart, not just the catalogue.** The catalogue arrives well before the
+series behind it. Dropping the placeholders at that point leaves a page with a list and a
+large empty rectangle, which reads as broken rather than as loading.
+
+**Consequence.** The placeholders must keep roughly the size of the content they stand in
+for, or the layout jumps when the real thing lands; the chart placeholder is pinned to the
+chart's own 380 px. A test asserts the markup and the styles for it both exist, since
+either one alone renders nothing.
+
+**Also decided: a failed load looks like the page, not like a stack trace.** It used to
+replace `<main>` with a `<pre>` holding the exception. It now explains that the site is
+up and its data did not answer, gives the underlying message quietly, and offers a retry.
+A reader who sees a stack trace learns only that something is broken; the thing worth
+telling them is whether to wait and reload or to report it.

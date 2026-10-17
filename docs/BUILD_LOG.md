@@ -745,3 +745,28 @@ single-writer rule and the busy-retry are untouched.
 was wrong — or rather, it was a true statement about a symptom. A loading state was still
 worth building afterwards, but it would have permanently hidden a twenty-fold
 regression behind a tasteful animation.
+
+## Showing the shape of the page while it loads (2026-10-17)
+
+With the catalogue down from 3.6 s to 0.1 s there is much less blank page to cover, but
+there is still a first paint with nothing in it, and on a slow connection there is more.
+The page now ships its own shape: grey blocks where the dataset cards, the title, the
+chart, the revisions table and the provenance table will be, written into the HTML rather
+than drawn by a script. A skeleton drawn by JavaScript arrives only after the page's own
+code has run, which is a good part of the wait it is meant to cover.
+
+`<main>` carries `data-loading` and `aria-busy="true"` until the first dataset is fully
+drawn — chart and provenance included, not just the catalogue, since removing the
+placeholders between those two steps swaps one empty page for another. The pulse is
+scoped to `data-loading` and switched off under `prefers-reduced-motion`.
+
+The failure path changed with it. A page that could not reach its data used to replace
+itself with a `<pre>` holding the exception. It now says what happened in its own voice
+— that the site is up and the data behind it did not answer, that a pipeline run holding
+the database is the usual cause — shows the underlying message quietly, and offers a
+retry button. Verified by serving the page with every `/api` call failing.
+
+Both states were checked by loading the real page in jsdom against a local server:
+seventeen placeholder shapes at parse, cards at 400 ms, chart and provenance by 1.2 s,
+`data-loading` gone; and with 700 ms of artificial latency per call, the placeholders
+correctly stay up longer.

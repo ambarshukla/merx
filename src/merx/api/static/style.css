@@ -93,6 +93,18 @@ button { cursor: pointer; }
 .note { border-left: 3px solid var(--accent); padding: 6px 10px; background: var(--panel); }
 code { font-size: 12px; }
 
+/* --- the shape of the page, before its data arrives ------------------------------
+   These are written into the HTML, not drawn by a script, so they are on screen at
+   first paint rather than after the page's JavaScript has run. They occupy the space
+   the real content will take, which is what stops the layout jumping once it lands. */
+.sk { background: var(--line); border-radius: 4px; display: block; }
+.sk-line { height: 11px; margin: 7px 0; }
+.sk-chart { height: 380px; border-radius: 8px; }
+.sk-card { height: 74px; border: 1px solid var(--line); border-radius: 8px; background: none; }
+[data-loading] .sk, [data-loading] .sk-card { animation: sk-pulse 1.4s ease-in-out infinite; }
+@keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .sk, .sk-card { animation: none; } }
+
 /* --- sector navigation and the dataset catalogue ------------------------------- */
 .sectors { display: flex; flex-wrap: wrap; gap: 6px; }
 .sectors button {
