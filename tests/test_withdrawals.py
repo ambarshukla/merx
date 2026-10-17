@@ -137,3 +137,35 @@ def test_an_older_acceptance_table_gains_the_period_column():
         "SELECT measure, valid_date, period, reason FROM ops.accepted_withdrawals"
     ).fetchall() == [("price", date(2020, 4, 20), 0, "source dropped it")]
     con.close()
+
+
+def test_missing_compares_a_history_that_has_not_caught_up_yet():
+    """The history is rebuilt after staging, so on the first run after the key changed
+    the staged table has `period` and the history does not. That combination failed
+    every re-stage on the host until the comparison was made schema-tolerant."""
+    con = duckdb.connect()
+    con.execute("CREATE SCHEMA staged; CREATE SCHEMA pit")
+    # New shape: staged carries period.
+    con.execute(
+        'CREATE TABLE staged."eia_wti_spot" (measure VARCHAR, valid_date DATE, '
+        "period INTEGER, value DOUBLE)"
+    )
+    con.execute("INSERT INTO staged.\"eia_wti_spot\" VALUES ('price', '2026-10-14', 0, 101.0)")
+    # Old shape: the history does not.
+    con.execute(
+        'CREATE TABLE pit."eia_wti_spot" (measure VARCHAR, valid_date DATE, value DOUBLE, '
+        "known_from_utc TIMESTAMP, known_to_utc TIMESTAMP)"
+    )
+    con.execute(
+        'INSERT INTO pit."eia_wti_spot" VALUES '
+        "('price', '2026-10-13', 100.0, '2026-10-13 10:00:00', NULL), "
+        "('price', '2026-10-14', 101.0, '2026-10-14 10:00:00', NULL)"
+    )
+
+    rows = withdrawals.missing(con, "eia_wti_spot", 'staged."eia_wti_spot"')
+
+    # 2026-10-13 is known to the history and absent from the build: one withdrawal.
+    assert [(m, d.isoformat(), period) for m, d, period, _, _, _ in rows] == [
+        ("price", "2026-10-13", 0)
+    ]
+    con.close()

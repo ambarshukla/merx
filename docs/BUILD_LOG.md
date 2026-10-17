@@ -601,3 +601,10 @@ queries that use it shipped before the tables had it. The parts that rebuild the
 each run recovered silently, which is exactly why this was hard to see — the broken
 parts were the ones that *don't* rebuild, and they are the blocked datasets and the
 read-only reader.
+
+**And once more, inside the engine.** Re-staging the eleven legacy datasets then failed
+on all eleven, with the same binder error in a third place: the `no_withdrawals` check
+compares the freshly staged table against the history, and the history is rebuilt
+*after* staging — so on the first run following the change, one side has `period` and
+the other does not. That comparison now matches on the columns both sides share, which
+also removes a hidden ordering dependency between two assets.
