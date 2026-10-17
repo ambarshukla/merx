@@ -156,6 +156,7 @@ merx missing eia_wti_spot                        # values known before, missing 
 merx accept-withdrawals eia_wti_spot --reason "..."
 merx revisions eia_us_gas_storage
 merx as-known-at eia_us_crude_stocks 2016-06-01  # the dataset as it stood then
+merx backfill cftc_wti_positions --from 2010     # older partitions, then one rebuild
 merx serve                                       # the consoles, on port 8000
 ```
 

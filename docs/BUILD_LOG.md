@@ -630,3 +630,29 @@ from `meta.publications`, which records what each publication attempt decided at
 it decided it; `ops.check_results` is used only to fill in what each check said. A
 blocked dataset therefore shows nothing against its published rows, which passed, and
 the blocking checks against the attempt being held back.
+
+## `merx backfill` (2026-10-17)
+
+Going back for a partitioned source's older files was a two-command recipe held in a
+session note rather than in the repository:
+
+```sh
+dagster asset materialize -m merx.orchestration.definitions --select "raw/<id>" --partition <key>
+dagster asset materialize -m merx.orchestration.definitions --select "staged/<id>,published/<id>,pit/<id>"
+```
+
+repeated once per partition. It is now `merx backfill <dataset> --from 2010`, which does
+the same thing and knows which partitions the contract has, which downstream assets
+belong to it (the reconciliation too, where there is one), and that the rebuild should
+happen **once at the end** rather than after every file — the staged table is built from
+the whole raw zone, so rebuilding per partition reaches the same answer by a far longer
+road.
+
+Two details are deliberate. A partition that fails does not stop the ones after it: a
+source that has lost one old file should not cost the caller the rest of the range, and
+the rebuild runs on whatever was fetched. And a rebuild that fails on a tier-1 dataset
+says so in one line, because for WTI, Brent and Henry Hub that failure is the publish
+gate doing its job, not a broken backfill.
+
+`--dry-run` prints the partitions and stops; an unknown partition is refused with the
+range the contract actually covers.
