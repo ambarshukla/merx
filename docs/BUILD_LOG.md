@@ -608,3 +608,25 @@ compares the freshly staged table against the history, and the history is rebuil
 *after* staging — so on the first run following the change, one side has `period` and
 the other does not. That comparison now matches on the columns both sides share, which
 also removes a hidden ordering dependency between two assets.
+
+## Saying what a warning is about (2026-10-17)
+
+The client page showed a `warn` badge and nothing else. A badge that cannot be
+questioned is not much better than no badge: it tells a user the data is suspect without
+telling them whether the suspicion matters to them. A stale futures curve and an unusual
+price are both `warn`, and the second one may well be the number they came for.
+
+The catalogue now carries the checks a publication failed, with what each of them said,
+and the page spells them out under the badge — in a person's words as well as the
+contract's name for the check. The same list explains a held-back series: which critical
+check stopped the newer data.
+
+**Where the reasons come from matters.** The obvious source — re-read the checks on the
+build behind the published rows — is wrong. `no_withdrawals` compares a build against the
+history, and the history keeps growing, so a build that passed cleanly when it was
+published can fail that same check weeks later. Reporting that as the reason the rows
+were published with a warning would be a lie about the past. The reasons instead come
+from `meta.publications`, which records what each publication attempt decided at the time
+it decided it; `ops.check_results` is used only to fill in what each check said. A
+blocked dataset therefore shows nothing against its published rows, which passed, and
+the blocking checks against the attempt being held back.

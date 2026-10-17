@@ -543,3 +543,36 @@ them that fewer than 15 remain — the same 744 withdrawn values that blocked WT
 publish gate. Without `min_observations` those months would have been compared against
 an 11-day average and counted as ordinary breaks, which would have been a worse answer
 than admitting the comparison is not available.
+
+## D-022: A quality flag states its reason, and the reason comes from the decision (2026-10-17)
+
+**Context.** The client console showed each published dataset's quality status as a
+badge — `pass` or `warn` — with no way to find out what a warning referred to. The
+information existed, in `ops.check_results` and `meta.publications`, but only the
+operations console showed it.
+
+**Decision.** The published catalogue returns, per dataset, the checks that the
+publication failed (`quality_reasons`) and, separately, the checks that blocked the most
+recent attempt if one is being held back (`latest_attempt_reasons`). The client page
+renders both in plain English beside the badge.
+
+The reasons are read from `meta.publications` — the record the publish gate wrote when it
+made the decision — and not by re-running or re-reading the checks now. `ops.check_results`
+supplies only each check's description.
+
+**Why.** A check's verdict is not a property of a build alone; some checks compare a
+build with state that moves. `no_withdrawals` compares the staged build against the
+point-in-time history, which grows with every run, so the same raw files can pass today
+and fail next month. Attributing that later failure to an earlier publication would
+misreport what the gate actually did. The publication log is the only record of the
+decision as taken, so it is the only honest source for "why is this marked warn".
+
+**Consequence.** The two lists can disagree, and that is the intended reading: a blocked
+dataset shows a clean `pass` for the rows on display and a list of blocking checks for
+the update that is not being shown. The cost is that a description can go missing if a
+build's check results are later pruned; the check's name still appears.
+
+**Alternatives rejected.** Re-reading the current checks (wrong for the reason above);
+putting the reasons only on the operations console (leaves the user who sees the badge
+without the answer); storing a frozen description inside `meta.publications` (duplicates
+`ops.check_results` for a rare case).
