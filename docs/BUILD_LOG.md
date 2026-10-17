@@ -699,3 +699,49 @@ recorded, so a source with no record cannot reach the page at all.
 The boilerplate that was genuinely general — what the published layer is, what "as known
 on" means, that every download is kept — moved into its own panel, "How this site treats
 the data", where it belongs.
+
+## The catalogue took three and a half seconds to say anything (2026-10-17)
+
+The client page was blank for a few seconds after every refresh. It looked like a
+cosmetic problem — nothing to show while the data loads — and the fix looked like a
+spinner. Measuring first said otherwise.
+
+```
+/api/client/datasets                 3.65s   27 KB
+/api/client/series/eia_wti_spot      0.34s  200 KB
+/api/client/datasets/.../provenance  0.30s    4 KB
+/client  (the page itself)           0.15s   20 KB
+```
+
+27 KB taking ten times longer than 200 KB is not a data problem. Timing the database
+directly:
+
+```
+open the file, run SELECT 1, close   30.9 ms
+SELECT 1 on an already-open connection 0.12 ms
+```
+
+`Store.query` opened the database, ran one statement and closed it again. The catalogue
+asks three questions per dataset plus a few more — **77 opens for one request**, about
+2.3 seconds on the laptop and 3.6 on the server, of which essentially none was spent
+reading. The page was not slow; it was opening the same file seventy-seven times.
+
+`Store.batch()` holds one connection for a block, and every `/api` endpoint is wrapped in
+one, so a request opens the file once. Blocks nest, so a function can batch its own
+queries without knowing whether its caller already did. The connection lives in a
+thread-local: a request is served start to finish on one thread, which is exactly the
+scope a held connection should have — never shared between requests, always closed with
+the block that opened it, including when the block raises.
+
+| | before | after |
+|---|---|---|
+| `/api/client/datasets` | 2.29 s, 77 opens | 0.11 s, 1 open |
+| `/api/ops/datasets` | 0.81 s, 29 opens | 0.05 s, 1 open |
+
+The database is still opened read-only and still never held between requests, so the
+single-writer rule and the busy-retry are untouched.
+
+**Worth remembering:** the first explanation was "the page needs a loading state", and it
+was wrong — or rather, it was a true statement about a symptom. A loading state was still
+worth building afterwards, but it would have permanently hidden a twenty-fold
+regression behind a tasteful animation.

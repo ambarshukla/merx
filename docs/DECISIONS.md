@@ -634,3 +634,36 @@ so the glossary has to be findable on its own — hence keeping it on the page r
 behind a link, and ordering it by relevance to the current dataset. A test asserts that no
 page marks terms and that the stylesheet carries no marker rules, so the affordance cannot
 return by half.
+
+## D-025: One database connection per request (2026-10-17)
+
+**Context.** `Store.query` opened the DuckDB file read-only, ran one statement and closed
+it. Opening costs ~31 ms; a query on an open connection costs ~0.12 ms. The published
+catalogue runs three queries per dataset, so one request made 77 opens and took 2.3 s
+locally and 3.6 s on the server, almost all of it in `duckdb.connect`.
+
+**Decision.** `Store.batch()` is a context manager that holds one read-only connection for
+the block; `Store.query` uses the held connection when there is one and opens its own
+otherwise. Every `/api` endpoint runs inside a batch. The held connection lives in a
+`threading.local`, and blocks nest by depth count.
+
+**Why a thread-local, and not a pooled or long-lived connection.** A request is served
+start to finish on one thread, so a thread is exactly the lifetime a held connection
+should have: it cannot leak into another request, and it is closed by the same `finally`
+that would run if the endpoint raised. A connection shared across requests would need
+locking, because DuckDB connections are not safe to use concurrently, and would keep a
+file handle open across a pipeline run that wants to write.
+
+**Why not cache the catalogue instead.** Caching would also have made the page fast, and
+would have introduced a second question — when is the cache stale — to solve a problem
+that was really just a loop doing the expensive thing. The data here changes once a day;
+reading it in 0.1 s needs no cache.
+
+**Consequence.** The read-only, never-held-between-requests property is unchanged, so the
+single-writer rule and the busy-retry still hold. A future endpoint that forgets the
+wrapper is correct but slow, which is the right direction for a mistake to fail.
+
+**Alternatives rejected.** One connection for the whole process (concurrency and the
+writer lock); rewriting the catalogue as a single UNION query over every published table
+(fragile, and the per-table schema tolerance would have to be folded in); caching (see
+above).
