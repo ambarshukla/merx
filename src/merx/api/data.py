@@ -1,12 +1,20 @@
 """Read-only queries behind the two consoles.
 
-Every query opens the database read-only and closes it straight away. DuckDB lets one
-process write a database file at a time, so while a pipeline run is writing, a read can
-briefly fail to open the file; it is retried a few times before giving up.
+The database is always opened read-only, and never held between requests. DuckDB lets
+one process write a database file at a time, so while a pipeline run is writing, a read
+can briefly fail to open the file; it is retried a few times before giving up.
+
+Within one request the connection *is* reused, through ``Store.batch``. Opening the file
+costs around 30 ms and a query on an open connection costs a fraction of a millisecond,
+so a page that asks many small questions is otherwise almost entirely the cost of
+opening the same file over and over.
 """
 
 import bisect
+import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -25,27 +33,73 @@ class DatabaseBusy(RuntimeError):
     """The pipeline held the database for longer than the retries allow."""
 
 
+# A connection held for the duration of one `Store.batch()` block, per thread. Each
+# request is served start to finish on one thread, so a thread is exactly the scope a
+# held connection should have: never shared between requests, always closed with the
+# block that opened it.
+_held = threading.local()
+
+
 @dataclass(frozen=True)
 class Store:
     data_dir: Path
+
+    @contextmanager
+    def batch(self) -> Iterator[None]:
+        """Reuse one connection for every query inside the block.
+
+        Opening the database file costs around 30 ms; a query on a connection already
+        open costs a fraction of a millisecond. A page that asks eighty small questions
+        therefore spends nearly all of its time opening and closing the same file, not
+        reading it. Inside this block the file is opened once.
+
+        Blocks nest: an inner one reuses the connection the outer one holds, so a
+        function may batch its own queries without knowing whether its caller already
+        has.
+        """
+        depth = getattr(_held, "depth", 0)
+        if depth:
+            _held.depth = depth + 1
+            try:
+                yield
+            finally:
+                _held.depth -= 1
+            return
+        path = self.data_dir / DB_FILE
+        if not path.exists():
+            yield  # nothing to open; every query returns empty anyway
+            return
+        con = self._connect(path)
+        _held.connection, _held.depth = con, 1
+        try:
+            yield
+        finally:
+            _held.connection, _held.depth = None, 0
+            con.close()
+
+    def _connect(self, path: Path) -> duckdb.DuckDBPyConnection:
+        """Open the file read-only, waiting out a run that is writing to it."""
+        for attempt in range(_RETRIES):
+            try:
+                return duckdb.connect(str(path), read_only=True)
+            except duckdb.IOException:
+                if attempt == _RETRIES - 1:
+                    raise DatabaseBusy("the database is being written; try again") from None
+                time.sleep(_PAUSE_S)
+        raise DatabaseBusy("the database is being written; try again")
 
     def query(self, sql: str, params: list | None = None) -> list[tuple]:
         path = self.data_dir / DB_FILE
         if not path.exists():
             return []
-        for attempt in range(_RETRIES):
-            try:
-                con = duckdb.connect(str(path), read_only=True)
-            except duckdb.IOException:
-                if attempt == _RETRIES - 1:
-                    raise DatabaseBusy("the database is being written; try again") from None
-                time.sleep(_PAUSE_S)
-                continue
-            try:
-                return con.execute(sql, params or []).fetchall()
-            finally:
-                con.close()
-        return []
+        held = getattr(_held, "connection", None)
+        if held is not None:
+            return held.execute(sql, params or []).fetchall()
+        con = self._connect(path)
+        try:
+            return con.execute(sql, params or []).fetchall()
+        finally:
+            con.close()
 
     def tables(self) -> set[tuple[str, str]]:
         return set(self.query("SELECT table_schema, table_name FROM information_schema.tables"))

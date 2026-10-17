@@ -11,12 +11,12 @@
   <h1>merx</h1><span class="sub">published commodity data, with its history</span>
   <nav><a class="here" href="/client">Data</a><a href="/sources">Two sources</a><a href="/ops">Operations</a></nav>
 </header>
-<main>
+<main data-loading aria-busy="true">
   <section class="panel">
     <div class="row" style="justify-content: space-between; align-items: flex-start">
       <div>
         <h2 style="margin:0 0 3px">Browse by sector</h2>
-        <div class="small muted" id="catalog-count"></div>
+        <div class="small muted" id="catalog-count">Loading the catalogue…</div>
       </div>
       <label class="small muted">Show
         <select id="type-filter">
@@ -25,14 +25,19 @@
       </label>
     </div>
     <div class="sectors" id="sectors" style="margin-top:10px"></div>
-    <div class="catalog" id="catalog" style="margin-top:10px"></div>
+    <div class="catalog" id="catalog" style="margin-top:10px">
+      <span class="sk-card"></span><span class="sk-card"></span><span class="sk-card"></span>
+      <span class="sk-card"></span><span class="sk-card"></span><span class="sk-card"></span>
+      <span class="sk-card"></span><span class="sk-card"></span>
+    </div>
   </section>
 
   <section class="panel">
     <div class="row" style="justify-content: space-between">
       <div>
-        <h2 id="title" style="margin-bottom:2px"></h2>
-        <div class="small muted" id="meta"></div>
+        <h2 id="title" style="margin-bottom:2px"><span class="sk sk-line"
+          style="width:280px; height:15px"></span></h2>
+        <div class="small muted" id="meta"><span class="sk sk-line" style="width:420px"></span></div>
       </div>
       <div id="status" style="text-align:right"></div>
     </div>
@@ -50,7 +55,7 @@
       <button id="clear-asof">Clear</button>
     </div>
     <div class="legend" id="legend" style="margin-top:10px"></div>
-    <div class="chart" id="chart"></div>
+    <div class="chart" id="chart"><span class="sk sk-chart"></span></div>
     <div class="small muted" id="asof-note"></div>
     <div class="small muted" id="series-note" style="margin-top:6px"></div>
   </section>
@@ -61,7 +66,7 @@
       Values the source has changed or removed since they were first known. Every
       version is kept; nothing is overwritten.
     </div>
-    <div id="revisions"></div>
+    <div id="revisions"><span class="sk sk-line" style="width:100%"></span><span class="sk sk-line" style="width:92%"></span><span class="sk sk-line" style="width:84%"></span></div>
   </section>
 
   <section class="panel">
@@ -72,7 +77,7 @@
       written out by hand: it is read from the dataset's contract and from the raw zone's
       manifest, so it cannot drift away from what the pipeline really does.
     </div>
-    <div id="provenance" class="small"></div>
+    <div id="provenance" class="small"><span class="sk sk-line" style="width:100%"></span><span class="sk sk-line" style="width:92%"></span><span class="sk sk-line" style="width:84%"></span></div>
   </section>
 
   <section class="panel">
@@ -293,16 +298,26 @@ async function load() {
   };
   window.addEventListener("resize", () => current && draw());
   drawSectors();
-  select(current.id);
+  // Wait for the first chart and provenance too: taking the placeholders away any
+  // earlier would swap one empty page for another.
+  await select(current.id);
+  done();
+}
+
+function done() {
+  const main = document.querySelector("main");
+  main.removeAttribute("data-loading");
+  main.setAttribute("aria-busy", "false");
 }
 
 function select(id) {
   current = catalog.find((c) => c.id === id);
-  if (!current) return;
+  if (!current) return Promise.resolve();
   // Sub-daily series hold thousands of points a month: a 15-year default would be
   // meaningless and slow, so they open on a short window.
   if (current.sub_daily && years > 1) years = 1;
   const m = document.getElementById("measure");
+  // (returns a promise: see the end of the function)
   m.innerHTML = current.measures.map((x) => `<option>${x}</option>`).join("");
   document.getElementById("measure-wrap").style.display = current.measures.length > 1 ? "" : "none";
   document.getElementById("title").textContent = current.title;
@@ -348,8 +363,7 @@ function select(id) {
   const first = CONCEPTS_FOR[current.sector] || [];
   renderConcepts("concepts", [...first, ...ALWAYS.filter((k) => !first.includes(k))]);
   drawCatalog();
-  draw();
-  drawProvenance(current.id);
+  return Promise.all([draw(), drawProvenance(current.id)]);
 }
 
 async function draw() {
@@ -395,7 +409,20 @@ async function draw() {
     : `<div class="muted small">No revisions in the history for this series.</div>`;
 }
 
-load().catch((e) => { document.querySelector("main").innerHTML = `<pre>${esc(e)}</pre>`; });
+load().catch((e) => {
+  done();
+  document.querySelector("main").innerHTML = `<section class="panel">
+    <h2>This page could not load its data</h2>
+    <div class="small">
+      <p>The site is up — this is the published data behind it that did not answer.
+        It is usually a pipeline run holding the database for a moment; reloading in a
+        few seconds normally works.</p>
+      <p class="muted">${esc(e.message || e)}</p>
+    </div>
+    <div class="row" style="margin-top:10px"><button onclick="location.reload()">
+      Try again</button></div>
+  </section>`;
+});
 </script>
 </body>
 </html>

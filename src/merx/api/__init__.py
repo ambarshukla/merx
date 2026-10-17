@@ -11,6 +11,7 @@ records who decided what. Run with ``merx serve``.
 """
 
 from datetime import date, datetime
+from functools import wraps
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -31,6 +32,20 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     contracts = load_contracts(reference)
     by_id = {c.id: c for c in contracts}
     app = FastAPI(title="merx", docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+    def one_connection(endpoint):
+        """Serve a whole request from a single database connection.
+
+        Opening the file costs far more than reading from it, and a page like the
+        catalogue asks dozens of small questions. See ``Store.batch``.
+        """
+
+        @wraps(endpoint)
+        def wrapper(*args, **kwargs):
+            with store.batch():
+                return endpoint(*args, **kwargs)
+
+        return wrapper
 
     def contract(dataset: str) -> Contract:
         if dataset not in by_id:
@@ -70,14 +85,17 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
 
     # --- ops ----------------------------------------------------------------------
     @app.get("/api/ops/datasets")
+    @one_connection
     def ops_datasets():
         return data.dataset_status(store, contracts)
 
     @app.get("/api/ops/exceptions")
+    @one_connection
     def ops_exceptions():
         return data.exceptions(store)
 
     @app.get("/api/ops/datasets/{dataset}")
+    @one_connection
     def ops_dataset(dataset: str):
         c = contract(dataset)
         return {
@@ -87,15 +105,18 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         }
 
     @app.get("/api/ops/lab")
+    @one_connection
     def ops_lab():
         return data.lab_headline(store)
 
     # --- client: published data only ----------------------------------------------
     @app.get("/api/client/datasets")
+    @one_connection
     def client_datasets():
         return data.published_catalog(store, contracts, reference)
 
     @app.get("/api/client/series/{dataset}")
+    @one_connection
     def client_series(
         dataset: str,
         measure: str | None = None,
@@ -113,6 +134,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         }
 
     @app.get("/api/client/series/{dataset}/as-known-at")
+    @one_connection
     def client_as_known_at(dataset: str, at: datetime, measure: str | None = None):
         c = published(dataset)
         m = measure_of(c, measure)
@@ -126,14 +148,17 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         }
 
     @app.get("/api/client/datasets/{dataset}/provenance")
+    @one_connection
     def client_provenance(dataset: str):
         return data.provenance(store, published(dataset), reference)
 
     @app.get("/api/client/sources")
+    @one_connection
     def client_sources():
         return data.reconciled_pairs(store, contracts)
 
     @app.get("/api/client/sources/{dataset}")
+    @one_connection
     def client_source(dataset: str):
         c = contract(dataset)
         if c.reconcile_with is None:
@@ -141,6 +166,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         return data.two_sources(store, c, by_id[c.reconcile_with.dataset])
 
     @app.get("/api/client/series/{dataset}/revisions")
+    @one_connection
     def client_revisions(dataset: str, measure: str | None = None):
         c = published(dataset)
         return data.revisions(store, c, measure_of(c, measure))

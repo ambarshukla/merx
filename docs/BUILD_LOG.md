@@ -699,3 +699,74 @@ recorded, so a source with no record cannot reach the page at all.
 The boilerplate that was genuinely general — what the published layer is, what "as known
 on" means, that every download is kept — moved into its own panel, "How this site treats
 the data", where it belongs.
+
+## The catalogue took three and a half seconds to say anything (2026-10-17)
+
+The client page was blank for a few seconds after every refresh. It looked like a
+cosmetic problem — nothing to show while the data loads — and the fix looked like a
+spinner. Measuring first said otherwise.
+
+```
+/api/client/datasets                 3.65s   27 KB
+/api/client/series/eia_wti_spot      0.34s  200 KB
+/api/client/datasets/.../provenance  0.30s    4 KB
+/client  (the page itself)           0.15s   20 KB
+```
+
+27 KB taking ten times longer than 200 KB is not a data problem. Timing the database
+directly:
+
+```
+open the file, run SELECT 1, close   30.9 ms
+SELECT 1 on an already-open connection 0.12 ms
+```
+
+`Store.query` opened the database, ran one statement and closed it again. The catalogue
+asks three questions per dataset plus a few more — **77 opens for one request**, about
+2.3 seconds on the laptop and 3.6 on the server, of which essentially none was spent
+reading. The page was not slow; it was opening the same file seventy-seven times.
+
+`Store.batch()` holds one connection for a block, and every `/api` endpoint is wrapped in
+one, so a request opens the file once. Blocks nest, so a function can batch its own
+queries without knowing whether its caller already did. The connection lives in a
+thread-local: a request is served start to finish on one thread, which is exactly the
+scope a held connection should have — never shared between requests, always closed with
+the block that opened it, including when the block raises.
+
+| | before | after |
+|---|---|---|
+| `/api/client/datasets` | 2.29 s, 77 opens | 0.11 s, 1 open |
+| `/api/ops/datasets` | 0.81 s, 29 opens | 0.05 s, 1 open |
+
+The database is still opened read-only and still never held between requests, so the
+single-writer rule and the busy-retry are untouched.
+
+**Worth remembering:** the first explanation was "the page needs a loading state", and it
+was wrong — or rather, it was a true statement about a symptom. A loading state was still
+worth building afterwards, but it would have permanently hidden a twenty-fold
+regression behind a tasteful animation.
+
+## Showing the shape of the page while it loads (2026-10-17)
+
+With the catalogue down from 3.6 s to 0.1 s there is much less blank page to cover, but
+there is still a first paint with nothing in it, and on a slow connection there is more.
+The page now ships its own shape: grey blocks where the dataset cards, the title, the
+chart, the revisions table and the provenance table will be, written into the HTML rather
+than drawn by a script. A skeleton drawn by JavaScript arrives only after the page's own
+code has run, which is a good part of the wait it is meant to cover.
+
+`<main>` carries `data-loading` and `aria-busy="true"` until the first dataset is fully
+drawn — chart and provenance included, not just the catalogue, since removing the
+placeholders between those two steps swaps one empty page for another. The pulse is
+scoped to `data-loading` and switched off under `prefers-reduced-motion`.
+
+The failure path changed with it. A page that could not reach its data used to replace
+itself with a `<pre>` holding the exception. It now says what happened in its own voice
+— that the site is up and the data behind it did not answer, that a pipeline run holding
+the database is the usual cause — shows the underlying message quietly, and offers a
+retry button. Verified by serving the page with every `/api` call failing.
+
+Both states were checked by loading the real page in jsdom against a local server:
+seventeen placeholder shapes at parse, cards at 400 ms, chart and provenance by 1.2 s,
+`data-loading` gone; and with 700 ms of artificial latency per call, the placeholders
+correctly stay up longer.

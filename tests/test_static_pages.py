@@ -196,3 +196,32 @@ def test_no_page_still_asks_for_the_markers_that_were_removed():
         assert "explainAgain" not in body, f"{page.name} still re-attaches markers"
     style = (STATIC / "style.css").read_text(encoding="utf-8")
     assert "explain-mark" not in style and "explain-pop" not in style
+
+
+def test_the_client_page_holds_its_shape_before_the_data_arrives():
+    """The placeholders are in the markup, not drawn by a script.
+
+    A skeleton rendered by JavaScript appears only once the page's own code has run,
+    which is most of the wait it is meant to cover. These are in the HTML, so they are
+    there at first paint.
+    """
+    body = (STATIC / "client.html").read_text(encoding="utf-8")
+    style = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert "data-loading" in body and 'aria-busy="true"' in body
+    assert body.count("sk-card") >= 4, "the catalogue should show several card shapes"
+    assert "sk-chart" in body, "the chart is the tallest empty space on the page"
+    # Every placeholder class the markup uses must be styled, or it renders as nothing.
+    for name in ("sk", "sk-line", "sk-card", "sk-chart"):
+        assert f".{name} " in style or f".{name} {{" in style or f".{name}," in style
+
+    # Taking the shapes away is the page's job once it has content.
+    assert 'removeAttribute("data-loading")' in body
+    assert 'setAttribute("aria-busy", "false")' in body
+
+
+def test_a_page_that_cannot_load_says_so_in_its_own_voice():
+    """The failure path used to dump a stack trace into the page."""
+    body = (STATIC / "client.html").read_text(encoding="utf-8")
+    assert "<pre>" not in body
+    assert "could not load its data" in body
+    assert "location.reload()" in body, "a failure should offer a way out of itself"
