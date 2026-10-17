@@ -608,3 +608,51 @@ compares the freshly staged table against the history, and the history is rebuil
 *after* staging — so on the first run following the change, one side has `period` and
 the other does not. That comparison now matches on the columns both sides share, which
 also removes a hidden ordering dependency between two assets.
+
+## Saying what a warning is about (2026-10-17)
+
+The client page showed a `warn` badge and nothing else. A badge that cannot be
+questioned is not much better than no badge: it tells a user the data is suspect without
+telling them whether the suspicion matters to them. A stale futures curve and an unusual
+price are both `warn`, and the second one may well be the number they came for.
+
+The catalogue now carries the checks a publication failed, with what each of them said,
+and the page spells them out under the badge — in a person's words as well as the
+contract's name for the check. The same list explains a held-back series: which critical
+check stopped the newer data.
+
+**Where the reasons come from matters.** The obvious source — re-read the checks on the
+build behind the published rows — is wrong. `no_withdrawals` compares a build against the
+history, and the history keeps growing, so a build that passed cleanly when it was
+published can fail that same check weeks later. Reporting that as the reason the rows
+were published with a warning would be a lie about the past. The reasons instead come
+from `meta.publications`, which records what each publication attempt decided at the time
+it decided it; `ops.check_results` is used only to fill in what each check said. A
+blocked dataset therefore shows nothing against its published rows, which passed, and
+the blocking checks against the attempt being held back.
+
+## `merx backfill` (2026-10-17)
+
+Going back for a partitioned source's older files was a two-command recipe held in a
+session note rather than in the repository:
+
+```sh
+dagster asset materialize -m merx.orchestration.definitions --select "raw/<id>" --partition <key>
+dagster asset materialize -m merx.orchestration.definitions --select "staged/<id>,published/<id>,pit/<id>"
+```
+
+repeated once per partition. It is now `merx backfill <dataset> --from 2010`, which does
+the same thing and knows which partitions the contract has, which downstream assets
+belong to it (the reconciliation too, where there is one), and that the rebuild should
+happen **once at the end** rather than after every file — the staged table is built from
+the whole raw zone, so rebuilding per partition reaches the same answer by a far longer
+road.
+
+Two details are deliberate. A partition that fails does not stop the ones after it: a
+source that has lost one old file should not cost the caller the rest of the range, and
+the rebuild runs on whatever was fetched. And a rebuild that fails on a tier-1 dataset
+says so in one line, because for WTI, Brent and Henry Hub that failure is the publish
+gate doing its job, not a broken backfill.
+
+`--dry-run` prints the partitions and stops; an unknown partition is refused with the
+range the contract actually covers.

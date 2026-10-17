@@ -268,21 +268,66 @@ def lab_headline(store: Store) -> list[dict]:
 # --- client (published data only) -------------------------------------------------------
 
 
+def _check_descriptions(store: Store) -> dict[tuple[str, str, str], str]:
+    """What each check said, keyed by (dataset, build, check)."""
+    if not store.has("ops", "check_results"):
+        return {}
+    return {
+        (dataset_id, build_id, name): description
+        for dataset_id, build_id, name, description in store.query(
+            """
+            SELECT dataset_id, build_id, check_name, description FROM ops.check_results
+            QUALIFY row_number() OVER (PARTITION BY dataset_id, build_id, check_name
+                                       ORDER BY checked_at_utc DESC) = 1
+            """
+        )
+    }
+
+
+def _publications(store: Store) -> tuple[dict[str, tuple], dict[str, tuple]]:
+    """The newest attempt per dataset, and the newest one that actually published.
+
+    They differ whenever the gate is holding newer data back: the rows on display come
+    from the older, successful publication, so the two have to be reported separately.
+    """
+    if not store.has("meta", "publications"):
+        return {}, {}
+    rows = store.query(
+        "SELECT dataset_id, status, attempted_at_utc, build_id, failed_checks "
+        "FROM meta.publications ORDER BY attempted_at_utc"
+    )
+    latest, published = {}, {}
+    for dataset_id, status, at, build_id, failed in rows:
+        latest[dataset_id] = (status, at, build_id, list(failed))
+        if status in ("pass", "warn"):
+            published[dataset_id] = (status, at, build_id, list(failed))
+    return latest, published
+
+
+def _reasons(descriptions: dict, dataset_id: str, entry: tuple | None) -> list[dict]:
+    """The checks a publication attempt recorded as failing, with what they said.
+
+    The names come from the attempt itself, not from re-reading the checks now: a check
+    can fail later against the same raw files (``no_withdrawals`` compares with a history
+    that keeps growing), and that must not be reported as a reason these rows were
+    published with a warning.
+    """
+    if entry is None:
+        return []
+    _status, _at, build_id, failed = entry
+    return [
+        {"check": name, "description": descriptions.get((dataset_id, build_id, name), "")}
+        for name in failed
+    ]
+
+
 def published_catalog(
     store: Store, contracts: list[Contract], reference: Reference | None = None
 ) -> list[dict]:
     tables = store.tables()
     instruments = reference.instruments if reference else {}
-    attempts = {}
-    if ("meta", "publications") in tables:
-        attempts = {
-            r[0]: (r[1], r[2])
-            for r in store.query(
-                "SELECT dataset_id, status, attempted_at_utc FROM meta.publications "
-                "QUALIFY row_number() OVER "
-                "(PARTITION BY dataset_id ORDER BY attempted_at_utc DESC) = 1"
-            )
-        }
+    attempts, publications = _publications(store)
+    descriptions = _check_descriptions(store)
     out = []
     for c in contracts:
         if ("published", c.id) not in tables:
@@ -322,9 +367,13 @@ def published_catalog(
                 "last_date": _iso(last),
                 "points": n,
                 "changed_values_in_history": revised,
-                # The newest attempt can be blocked while an older publication stays up.
+                # Why this publication is marked "warn": the checks it failed.
+                "quality_reasons": _reasons(descriptions, c.id, publications.get(c.id)),
+                # The newest attempt can be blocked while an older publication stays up,
+                # so what blocked it is reported separately from the rows on display.
                 "latest_attempt": attempts.get(c.id, (None,))[0],
                 "latest_attempt_utc": _iso(attempts.get(c.id, (None, None))[1]),
+                "latest_attempt_reasons": _reasons(descriptions, c.id, attempts.get(c.id)),
             }
         )
     return out

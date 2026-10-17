@@ -8,6 +8,7 @@
     merx as-known-at DATASET 2018-01-01     the dataset as it stood at that moment
     merx serve                              the consoles at http://127.0.0.1:8000
     merx refresh                            run the jobs due today (for a daily timer)
+    merx backfill DATASET --from 2015       fetch older partitions, then rebuild
 
 Everything else (fetching, staging, checks, publishing) runs in Dagster.
 """
@@ -64,6 +65,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8000)
     p = sub.add_parser("refresh")
     p.add_argument("--dry-run", action="store_true", help="list the jobs due today and stop")
+    p = sub.add_parser("backfill", help="rebuild a partitioned dataset from older files")
+    p.add_argument("dataset")
+    p.add_argument("--from", dest="start", help="first partition, e.g. 2015 or 2015-03")
+    p.add_argument("--to", dest="end", help="last partition (default: the newest)")
+    p.add_argument("--dry-run", action="store_true", help="list the partitions and stop")
     args = parser.parse_args(argv)
 
     if args.command == "refresh":
@@ -79,6 +85,47 @@ def main(argv: list[str] | None = None) -> int:
         for name, ok in refresh(defs, contracts):
             print(f"{'ok    ' if ok else 'failed'} {name}")
         return 0
+
+    if args.command == "backfill":
+        # Before opening the database: the run writes to it.
+        from merx.orchestration import backfill as bf
+        from merx.orchestration.definitions import defs
+
+        contract = _contract(args.dataset)
+        try:
+            keys = bf.partitions(contract, args.start, args.end)
+        except (bf.NotPartitioned, ValueError) as e:
+            raise SystemExit(str(e)) from None
+        if not keys:
+            print("no partitions in that range")
+            return 0
+        print(
+            f"{contract.id}: {len(keys)} partition{'' if len(keys) == 1 else 's'}, "
+            f"{keys[0]} to {keys[-1]}"
+        )
+        if args.dry_run:
+            for key in keys:
+                print(f"  {key}")
+            print(
+                "then: staged, published, history"
+                + (", reconciliation" if contract.reconcile_with else "")
+            )
+            return 0
+        steps = bf.backfill(
+            defs,
+            contract,
+            keys,
+            on_step=lambda s: print(
+                f"{'ok    ' if s.ok else 'failed'} {s.name}"
+                + (f"  ({s.message})" if s.message else "")
+            ),
+        )
+        failed = [s.name for s in steps if not s.ok]
+        print(
+            f"{len(steps) - len(failed)} of {len(steps)} steps ok"
+            + (f"; failed: {', '.join(failed)}" if failed else "")
+        )
+        return 1 if failed else 0
 
     if args.command == "serve":
         # Before opening the database: the consoles only ever read it, briefly.

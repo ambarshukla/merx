@@ -76,6 +76,11 @@ def test_client_history_and_a_held_back_update(tmp_path, points):
     client = TestClient(create_app(data))
     (wti,) = client.get("/api/client/datasets").json()
     assert (wti["quality_status"], wti["latest_attempt"]) == ("pass", "blocked")
+    # The rows on display passed every check; what is held back is a different build,
+    # so the two sets of reasons are reported separately.
+    assert wti["quality_reasons"] == []
+    assert [r["check"] for r in wti["latest_attempt_reasons"]] == ["no_withdrawals"]
+    assert "1 previously known value" in wti["latest_attempt_reasons"][0]["description"]
     # The last publication that passed is still what clients see.
     assert len(client.get("/api/client/series/eia_wti_spot").json()["points"]) == 5
     revisions = client.get("/api/client/series/eia_wti_spot/revisions").json()
@@ -88,6 +93,25 @@ def test_client_history_and_a_held_back_update(tmp_path, points):
     # The history records the source as it is now, without the vanished value, even
     # though the published layer still holds the last build that passed.
     assert len(at["points"]) == 4
+
+
+def test_a_warning_says_which_check_caused_it(tmp_path):
+    """A client seeing "warn" needs to know what the warning is about."""
+    from test_publish import FUTURES, run_all
+
+    stale = [(date(2024, 4, 1) + timedelta(days=i), 80.0 + i) for i in range(4)]
+    run_all(tmp_path, FUTURES, stale, "RCLC1")
+    client = TestClient(create_app(tmp_path / "data"))
+    (futures,) = client.get("/api/client/datasets").json()
+    assert futures["quality_status"] == "warn"
+    (reason,) = futures["quality_reasons"]
+    assert reason["check"] == "freshness"
+    assert "days old" in reason["description"]
+
+
+def test_a_passing_publication_gives_no_reasons(client):
+    (wti,) = client.get("/api/client/datasets").json()
+    assert (wti["quality_status"], wti["quality_reasons"]) == ("pass", [])
 
 
 def test_pages_and_assets_are_served(client):

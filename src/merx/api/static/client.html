@@ -34,8 +34,9 @@
         <h2 id="title" style="margin-bottom:2px"></h2>
         <div class="small muted" id="meta"></div>
       </div>
-      <div id="status"></div>
+      <div id="status" style="text-align:right"></div>
     </div>
+    <div id="why" class="note small" style="display:none; margin-top:10px"></div>
     <div id="held" class="note small" style="display:none; margin-top:10px"></div>
     <div class="row" style="margin-top:12px">
       <label id="measure-wrap">Measure <select id="measure"></select></label>
@@ -121,6 +122,29 @@ const ALWAYS = ["contract", "sector", "data-type", "measure", "unit", "tier",
   "publish-gate", "check", "exception", "freshness", "as-known-on", "revision",
   "withdrawal", "reconciliation", "spot-price", "benchmark", "negative-price",
   "settlement-period", "carbon-intensity", "forecast-error"];
+// A check's name is how the contract spells it; this is how a person says it.
+const CHECK_LABEL = {
+  not_null_value: "gaps in the values",
+  unique_measure_valid_date: "the same date twice",
+  range_value: "values outside the plausible range",
+  freshness: "how old the newest value is",
+  balance: "the parts not adding up to the total",
+  no_withdrawals: "values the source has removed",
+  periods_per_day: "the wrong number of periods in a day",
+};
+function checkLabel(name) {
+  // Anomaly checks are named after the detector they run, e.g. anomaly_seasonal_suite.
+  if (name.startsWith("anomaly")) return "unusual values";
+  return CHECK_LABEL[name] || name.replace(/_/g, " ");
+}
+function reasonList(reasons) {
+  return reasons.map((r) => `<li><b>${esc(checkLabel(r.check))}</b>
+    <span class="muted">(${esc(r.check)})</span>${r.description
+      ? ` — ${esc(r.description)}` : ""}</li>`).join("");
+}
+function reasonSummary(reasons) {
+  return reasons.map((r) => `${checkLabel(r.check)}: ${r.description}`).join("; ");
+}
 const SECTOR_LABEL = {oil: "Oil", gas: "Gas", power: "Power", carbon: "Carbon",
   metals: "Metals", ags: "Agriculture"};
 const TYPE_LABEL = {spot: "price", fundamental: "fundamental", positioning: "positioning",
@@ -165,7 +189,8 @@ function drawCatalog() {
     <button class="card ${current && c.id === current.id ? "here" : ""}" data-id="${c.id}">
       <span class="name">${esc(c.title)}</span>
       <span class="facts">
-        ${badge(c.quality_status)}
+        <span title="${esc(c.quality_reasons.length ? reasonSummary(c.quality_reasons)
+          : "every check on this publication passed")}">${badge(c.quality_status)}</span>
         <span class="tag">${esc(TYPE_LABEL[c.data_type] || c.data_type)}</span>
         <span class="tag">${esc(c.frequency.replace("_", "-"))}</span>
         <span class="tag">${esc(typeof c.unit === "string" ? c.unit : Object.values(c.units).join(" · "))}</span>
@@ -215,14 +240,28 @@ function select(id) {
     `${SECTOR_LABEL[current.sector] || current.sector} · ${unit} · ` +
     `${current.frequency.replace("_", "-")} · ${current.first_date} to ${current.last_date} · ` +
     `published ${current.published_at_utc?.slice(0, 16).replace("T", " ")} UTC`;
-  document.getElementById("status").innerHTML = badge(current.quality_status);
+  document.getElementById("status").innerHTML = badge(current.quality_status) +
+    (current.quality_reasons.length
+      ? `<div class="small muted" style="margin-top:4px">${current.quality_reasons.length}
+         ${current.quality_reasons.length === 1 ? "check" : "checks"} failed</div>` : "");
+  const why = document.getElementById("why");
+  if (current.quality_reasons.length) {
+    why.style.display = "";
+    why.innerHTML = `This publication is marked
+      <span class="badge warn">${esc(current.quality_status)}</span> because these
+      <span data-explain="check">checks</span> failed when it was published. The data is
+      still published — its <span data-explain="tier">tier</span> allows that — but it is
+      flagged so you can judge it:
+      <ul style="margin:6px 0 0">${reasonList(current.quality_reasons)}</ul>`;
+  } else why.style.display = "none";
   const held = document.getElementById("held");
   if (current.latest_attempt && current.latest_attempt === "blocked") {
     held.style.display = "";
     held.innerHTML = `Newer data for this series is being <b>held back</b>: the latest
       update (${current.latest_attempt_utc.slice(0, 16).replace("T", " ")} UTC) failed a
-      critical check and was not published. What you see is the last publication that
-      passed.`;
+      critical <span data-explain="check">check</span> and was not published. What you
+      see is the last publication that passed.
+      <ul style="margin:6px 0 0">${reasonList(current.latest_attempt_reasons)}</ul>`;
   } else held.style.display = "none";
   const presets = PRESETS[id] || [];
   document.getElementById("presets").innerHTML = presets.map(([d, why]) =>
@@ -236,6 +275,7 @@ function select(id) {
   // Put the concepts that matter for this dataset at the top of the list.
   const first = CONCEPTS_FOR[current.sector] || [];
   renderConcepts("concepts", [...first, ...ALWAYS.filter((k) => !first.includes(k))]);
+  explainAgain();  // the notes above are rebuilt, so their ? marks have to be re-attached
   drawCatalog();
   draw();
 }

@@ -55,6 +55,7 @@ uses them.
 | **Open interest** | The number of futures contracts open at a point in time. Each has a long and a short side. |
 | **Ops console** | The operations view (`/ops`): dataset status, checks, exceptions, missing values, reconciliation and detector scores. |
 | **Partition** | One slice of a dataset that is fetched and tracked on its own, such as one year of a source published as yearly files. |
+| **Backfill** | Going back for the older partitions a dataset's routine daily refresh never asks for — when it is first onboarded, when the source republishes an old file, or when a parser is fixed and the files have to be read again. |
 | **PRA (price reporting agency)** | An organisation that assesses physical commodity prices from market evidence, for example Platts or Argus. |
 | **Precision** | Of the values a detector flags, the share that are truly wrong. Low precision means wasted reviewer time. |
 | **Producer/merchant** | In the COT report, companies that produce, process or use the physical commodity and use futures to hedge. |
