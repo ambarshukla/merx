@@ -25,3 +25,5 @@ cftc,084691,SILVER_COMEX_FUTURES,SILVER - COMMODITY EXCHANGE INC.,Market code ve
 cftc,085692,COPPER_COMEX_FUTURES,COPPER- #1 - COMMODITY EXCHANGE INC.,Market code verified against the 2026 disaggregated file on 2026-10-16
 cftc,111659,RBOB_NYMEX_FUTURES,GASOLINE RBOB - NEW YORK MERCANTILE EXCHANGE,Market code verified against the 2026 disaggregated file on 2026-10-16
 cftc,022651,ULSD_NYMEX_FUTURES,NY HARBOR ULSD - NEW YORK MERCANTILE EXCHANGE,Market code verified against the 2026 disaggregated file on 2026-10-16
+eia,MCRFPTX1,TX_CRUDE_PRODUCTION,"Texas Field Production of Crude Oil (Thousand Barrels)",
+eia,N9050TX2,TX_GAS_MARKETED_PRODUCTION,"Texas Natural Gas Marketed Production (MMcf)",

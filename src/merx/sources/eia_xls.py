@@ -3,7 +3,10 @@
 Layout observed 2026-10-15 across daily and weekly series (old binary Excel, .xls):
 
 * sheet ``Contents``: labels in column B and values in column C, including
-  ``Release Date:`` and ``Next Release Date:`` as ``MM/DD/YYYY`` text;
+  ``Release Date:`` and ``Next Release Date:`` as ``MM/DD/YYYY`` text. Copies captured
+  before about 2016 state the next release as a phrase instead of a date ("Last Week of
+  December 2012"), so that one is optional; the release date itself is not, because it is
+  what the file claims about itself and the honest knowledge time of an archived copy;
 * sheet ``Data 1``: row 1 ``Back to Contents`` and the series title, row 2
   ``Sourcekey`` and the series key, row 3 ``Date`` and the column title, then one row
   per observation: an Excel date serial and a number, or an empty cell where the source
@@ -29,24 +32,32 @@ class ParsedSeries:
     series_key: str
     title: str
     release_date: date
-    next_release_date: date
+    # None where the file names its next release in words rather than as a date.
+    next_release_date: date | None
     # (valid_date, value); value is None where the source has an empty cell.
     points: list[tuple[date, float | None]]
 
 
-def _release_dates(sheet: xlrd.sheet.Sheet) -> tuple[date, date]:
-    found: dict[str, date] = {}
+def _release_dates(sheet: xlrd.sheet.Sheet) -> tuple[date, date | None]:
+    labels = ("Release Date:", "Next Release Date:")
+    found: dict[str, date | None] = {}
     for r in range(sheet.nrows):
         row = sheet.row_values(r)
         if len(row) < 3:
             continue
         label = str(row[1]).strip()
-        if label in ("Release Date:", "Next Release Date:"):
+        if label in labels:
+            text = str(row[2]).strip()
             try:
-                found[label] = datetime.strptime(str(row[2]).strip(), "%m/%d/%Y").date()
+                found[label] = datetime.strptime(text, "%m/%d/%Y").date()
             except ValueError as e:
-                raise SourceFormatError(f"unreadable {label} {row[2]!r}") from e
-    missing = {"Release Date:", "Next Release Date:"} - found.keys()
+                # Older copies word the next release ("Last Week of December 2012"). That
+                # is a schedule, not a date, and nothing downstream can use it; the
+                # release date must still be a date.
+                if label == "Release Date:":
+                    raise SourceFormatError(f"unreadable {label} {text!r}") from e
+                found[label] = None
+    missing = set(labels) - found.keys()
     if missing:
         raise SourceFormatError(f"Contents sheet is missing {sorted(missing)}")
     return found["Release Date:"], found["Next Release Date:"]

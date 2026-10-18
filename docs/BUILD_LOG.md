@@ -859,3 +859,81 @@ the removal of seven.
 Small, and worth writing down: the number was on the page that makes the claims, it was
 wrong in the direction that flatters nobody, and the only reason it was caught is that two
 documents quoting the same fact disagreed.
+
+## Production, and the first series whose past is rewritten (2026-10-18)
+
+The question that started this was about Waha, the West Texas gas hub that printed
+negative prices on most trading days through the spring of 2024: could it go on the site?
+It cannot. The price is a proprietary index and EIA's API carries no Waha series at all —
+checked, rather than assumed, and both the check and the refusal are written into
+`docs/PROVENANCE.md`.
+
+What came out of asking was a better question. Every one of the 29 datasets here is a
+price, a position or a stock level, and none of those get revised. That is why the
+project's showpiece finding had to be values *withdrawn* — a source deleting history is
+the only way the past had ever changed. Production figures are different: they are
+estimates that firm up for years.
+
+So before writing anything, a prediction was recorded and then tested against 14 archived
+copies of each of two EIA spreadsheets, Texas crude oil production and Texas marketed gas
+production:
+
+* **overlapping months do differ** — abundantly;
+* **routine releases revise exactly the last two months**, every time;
+* **and roughly once a year a benchmarking release rewrites a hundred or more months at
+  once**, back as far as 2007, when the publisher swaps its own estimates for what states
+  finally reported. The pattern is bimodal, which makes it detectable: two months, or a
+  hundred, and almost nothing in between;
+* **no month has ever been withdrawn** — 0 losses across 26 vintage-to-vintage
+  comparisons, the exact opposite of the price series;
+* revisions are small for crude (a median well under 1%, worst about 4%) and **not small
+  for gas**, where single months have moved by up to 12.5%. That one was predicted wrong,
+  which is the useful kind of wrong.
+
+Both datasets are a contract file each and no new code, which is the claim this project
+keeps making. They are named after Texas and not the Permian, because EIA publishes by
+state and the basin straddles two of them; the reasoning is D-030.
+
+**What the data now shows.** January 2015 Texas gas production was published as 653,831
+MMcf. It now reads 666,792. The "as known on" explorer answers 653,831 for a replay date
+in 2017 and 666,792 for one in 2021, which is the first time that page has had a series
+whose past moves as a matter of routine rather than through loss.
+
+**Two things the probe found that the build had to deal with.**
+
+The first is a correctness problem in how knowledge time was assigned. The archive's
+oldest copy of the gas spreadsheet is stamped 2011-07-06 and contains a file whose own
+Contents sheet says it was released 2017-01-31. A capture cannot precede its file's
+publication, so the stamp is wrong, and trusting it placed five years of later revisions
+before the values they replaced: "as known on 2011-07-06" answered with data from 2017.
+Knowledge time is now the capture time *unless the file disproves it* (D-029), applied in
+one function that both staging and the point-in-time replay call, so the two cannot drift
+apart. The correction only ever moves a knowledge time later, which could in principle
+push one file past the next; nothing in the data does, and the replay now stops with a
+message naming both files rather than inventing revisions.
+
+The second is smaller: copies captured before about 2016 state the next release as a
+phrase — "Last Week of December 2012" — rather than a date. The strict parser rejected
+those two vintages outright. A worded next-release date is now read as absent; the
+release date itself is still required, because it is what the first fix depends on.
+
+**Verified, not assumed.** Both datasets materialise clean through raw, archive, staged,
+published and point-in-time, with every check passing. The point-in-time tables hold 252
+revised months for crude and 199 for gas, and zero withdrawals. The client page renders
+both — 451 monthly values, `kbbl` and `MMcf` on the axis, the 15-year default window
+giving 181 points — checked by loading the real page in jsdom and asserting on the DOM.
+
+A gotcha for next time: `document.body.textContent` in jsdom includes the text of inline
+`<script>` elements, so searching it for the error panel's wording matched the string
+literal in the page's own source and reported a failure that was not there. Strip
+`script`, `style` and `template` before asserting on a page's text.
+
+**Found while running the suite, unrelated to any of this.** A findings test compared a
+recorded date against `date.today()` evaluated later in the same test, so it failed any
+run that crossed midnight — which this one did, at 00:04. The test now carries the date
+forward from the moment the loss was noticed.
+
+**Nothing yet notices a revision.** No check looks at one: `no_withdrawals` sees deletions
+only. That is the obvious next control, and the shape of the data says what it should
+look for — a release that rewrites two months is routine, and one that rewrites a hundred
+is an event worth an exception.

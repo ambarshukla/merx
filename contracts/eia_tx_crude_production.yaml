@@ -1,0 +1,53 @@
+# Texas field production of crude oil, monthly — the first production dataset here, and
+# the first series whose past is routinely rewritten.
+#
+# Why Texas: the Permian basin straddles Texas and New Mexico, and EIA publishes
+# production by state, not by basin. The basin-level series existed only in the Drilling
+# Productivity Report, which EIA stopped publishing in June 2024. Texas is therefore a
+# proxy for the Permian, and is labelled as the state series it is (D-030).
+#
+# Why it is here: every other dataset in this project is a price, a position or a stock
+# level, and none of those revise. A production figure is an estimate that firms up for
+# years. Probed across 14 archived copies on 2026-10-18: a routine monthly release
+# rewrites exactly the last two months, and roughly once a year a benchmarking release
+# rewrites a hundred or more months at once, back as far as 2007. No month has ever been
+# withdrawn.
+id: eia_tx_crude_production
+title: Texas crude oil production, monthly
+domain: oil
+owner: oil-data-steward
+tier: 2
+frequency: monthly
+instrument: TX_CRUDE_PRODUCTION
+unit: kbbl
+measures: [production]
+source:
+  provider: eia
+  format: eia_hist_xls
+  url: https://www.eia.gov/dnav/pet/hist_xls/MCRFPTX1m.xls
+  series_key: MCRFPTX1
+  # 14 distinct archived copies, 2012-12 to 2026-05, which is where the revision history
+  # comes from: the file itself holds only the current vintage.
+  archive_backfill: true
+schedule:
+  # EIA releases this at the end of the month (the copy read on 2026-10-18 was released
+  # 2026-09-30 and announced the next for 2026-10-30). Checked weekly so an early or late
+  # release is picked up rather than waited for.
+  cron: "0 14 * * 3"
+  timezone: America/New_York
+checks:
+  # No blanks in 547 months, so a blank is a change worth failing on.
+  - {type: not_null, column: value}
+  - {type: unique, columns: [measure, valid_date]}
+  # Observed range over the full history is 30,189 to 181,130 thousand barrels a month.
+  # The bounds are plausibility bounds around that, not a forecast.
+  - {type: range, column: value, min: 0, max: 400000}
+  # Monthly data published about two and a half months in arrears: the file released
+  # 2026-09-30 ended at 2026-07-15. The gap peaks the day before a release, at about 107
+  # days; 125 allows one late release before this fires.
+  - {type: freshness, max_age_days: 125}
+  # Never seen here across 14 vintages, which is exactly why it is worth asserting.
+  - {type: no_withdrawals}
+# The lab has scored detectors on daily prices and weekly stocks, not on monthly
+# production, so no anomaly check until it has (docs/DQ_LAB.md).
+in_quality_lab: false

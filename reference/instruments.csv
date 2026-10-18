@@ -25,3 +25,5 @@ SILVER_COMEX_FUTURES,Silver futures market (Commodity Exchange Inc.) as reported
 COPPER_COMEX_FUTURES,Copper futures market (Commodity Exchange Inc.) as reported for positioning,copper,metals,futures_market,positioning,United States,contracts
 RBOB_NYMEX_FUTURES,Rbob gasoline futures market (New York Mercantile Exchange) as reported for positioning,gasoline,oil,futures_market,positioning,United States,contracts
 ULSD_NYMEX_FUTURES,Diesel futures market (New York Mercantile Exchange) as reported for positioning,diesel,oil,futures_market,positioning,United States,contracts
+TX_CRUDE_PRODUCTION,Texas field production of crude oil,crude_oil,oil,production,physical,Texas US,kbbl
+TX_GAS_MARKETED_PRODUCTION,Texas marketed production of natural gas,natural_gas,gas,production,physical,Texas US,MMcf

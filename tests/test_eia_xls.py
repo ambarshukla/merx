@@ -61,3 +61,14 @@ def test_unreadable_release_date_fails():
 def test_not_an_excel_file_fails():
     with pytest.raises(SourceFormatError, match="not a readable"):
         parse(b"<html>Service unavailable</html>", "RWTC")
+
+
+def test_worded_next_release_date_is_none_not_a_failure():
+    """Copies captured before about 2016 word the next release instead of dating it. The
+    phrase is unusable but the file is not: observed in the archive's 2012 and 2015 copies
+    of EIA's Texas crude production spreadsheet, 2026-10-18."""
+    worded = eia_workbook("RWTC", WTI_POINTS, next_release_date="Last Week of December 2012")
+    parsed = parse(worded, "RWTC")
+    assert parsed.release_date == date(2026, 10, 15)
+    assert parsed.next_release_date is None
+    assert parsed.points == WTI_POINTS

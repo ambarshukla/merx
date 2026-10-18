@@ -13,6 +13,7 @@ uses them.
 | **Backwardation** | A forward curve where later delivery is cheaper than nearer delivery, usually a sign of tight supply. |
 | **Balance check** | A check that an accounting identity holds on every date, e.g. open interest equals all long positions plus spreads. |
 | **Bcf** | Billion cubic feet, the unit for US natural gas volumes such as gas in storage. |
+| **Benchmarking revision** | A release that rewrites years of past values at once, because the publisher has replaced its own estimates with the figures states or companies finally reported. EIA's monthly production series do this roughly once a year; a routine monthly release changes only the last two months. |
 | **Bitemporal** | Storing two times per fact: when it applied (valid time) and when we learned it (knowledge time). |
 | **Blocking check** | An asset check whose failure stops anything downstream in the same run. Here: error-severity checks on tier 1 datasets. |
 | **Build (staged build)** | One rebuild of a staged table, identified by a fingerprint of the raw files it came from. Check results and publications refer to it. |
@@ -48,13 +49,16 @@ uses them.
 | **MAD (median absolute deviation)** | A robust measure of spread: the median of the distances from the median. Unlike standard deviation, one spike does not distort it. |
 | **Managed money** | In the COT report, funds that trade futures for clients: hedge funds and commodity trading advisers. |
 | **Manifest** | The table recording every raw download: where it came from, when, its hash and size. |
+| **Marketed production** | Gas that left the field for sale: gross withdrawals less the gas reinjected to maintain pressure, vented or flared. Smaller than gross withdrawals, larger than what reaches a consumer. |
 | **Measure** | One named number a dataset reports per date, e.g. `price`, or `managed_money_long` in a positioning report. |
 | **MMBtu** | One million British thermal units, the standard unit for pricing natural gas in the US. |
+| **MMcf** | Million cubic feet of natural gas (the first M is the Roman thousand, so MM is a million). A thousand MMcf is one Bcf. |
 | **Non-reportable positions** | Positions of traders too small to be reported individually; the CFTC derives them as the remainder of open interest. |
 | **NYMEX (New York Mercantile Exchange)** | The exchange where WTI crude oil and Henry Hub natural gas futures trade. |
 | **Open interest** | The number of futures contracts open at a point in time. Each has a long and a short side. |
 | **Ops console** | The operations view (`/ops`): dataset status, checks, exceptions, missing values, reconciliation and detector scores. |
 | **Partition** | One slice of a dataset that is fetched and tracked on its own, such as one year of a source published as yearly files. |
+| **Permian** | The oil and gas basin across West Texas and south-east New Mexico, and the largest single source of US crude. It is a basin, not a state: EIA publishes production by state, so Texas is used here as a stated proxy (D-030). |
 | **Provenance** | Where a number came from and what happened to it on the way: the publisher, the request that fetched it, the file it arrived in, and the terms it is published under. On the client page it is derived from the contract and the raw manifest, never written by hand. |
 | **Attribution** | The credit line a licence asks to be shown wherever the data is used, such as *Contains BMRS data © Elexon Limited*. Recorded per publisher in `reference/providers.csv` and shown beside every series. |
 | **Finding** | Something a control caught, stated with its number and a link to the evidence. Derived from the exceptions, the history and the reconciliation tables, so it appears when a check catches something and goes when the matter is closed. |
@@ -89,10 +93,13 @@ uses them.
 | **Stale run (stuck feed)** | The same value repeated where it should have changed, usually because a feed stopped updating. |
 | **Swap dealer** | In the COT report, banks and dealers that use futures to hedge swaps they have written for clients. |
 | **System price / market index price** | Two different GB electricity prices. The market index price is the day-ahead reference the exchanges report; the system price is what imbalances settle at afterwards. merx publishes the former. |
+| **Takeaway capacity** | How much a region's pipelines can carry out of it. Gas produced alongside oil has to go somewhere, so when production exceeds takeaway capacity the local price can turn negative: producers pay to have it taken away. |
 | **Tier** | How critical a dataset is. Tier 1 gets blocking checks and immediate alerts; lower tiers get warnings and next-day review. |
 | **Time to recover** | How long an exception stayed open, from the first failing check to the first passing one. |
 | **Valid date** | The date a value describes, as opposed to when it became known (knowledge time). |
 | **Version (point-in-time)** | One value of one (measure, date) during the time it was current, from when it became known to when it was revised or withdrawn. |
+| **Vintage** | One published version of a whole dataset: the file as it stood at one moment. Replaying vintages in knowledge-time order is what produces a revision history. |
+| **Waha** | A natural gas trading hub in West Texas, known for negative prices when Permian output exceeds takeaway capacity. Its price is a proprietary index, so it is deliberately not used here (`docs/PROVENANCE.md`). |
 | **Wayback Machine** | The Internet Archive's public collection of dated copies of web pages and files. Used here to recover past versions of source files. |
 | **Withdrawal** | A value that was in an earlier version of a dataset and is missing from the current one. |
 | **WTI (West Texas Intermediate)** | The main US crude oil price benchmark, priced at Cushing, Oklahoma. |
