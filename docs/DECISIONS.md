@@ -888,3 +888,31 @@ described. Removing it also removes the question of what the EIA page's tagline 
 colour so it reads as clickable. A test asserts all four pages carry the same four tabs,
 exactly one marked as current, and no tagline — because a tab missing from one page is
 only noticed by someone already stuck on it.
+
+## D-033: The EIA page groups its datasets by what they measure (2026-10-19)
+
+**Context.** The EIA page listed all 16 datasets in one table. It was correct and almost
+unreadable: three spot prices appeared twice each because they come through two channels,
+the five storage regions sat in a block that dwarfed everything around them, and nothing
+told the reader that a price, a storage level and a production estimate are different
+kinds of number with different release rhythms.
+
+**Decision.** Four groups, each with a heading, a count and its own table: prices,
+futures, in storage, production. The grouping is the instrument's `kind`, which
+`reference/instruments.csv` already records for every instrument; the API carries it per
+dataset and lists them in group order, and the page groups by first appearance.
+
+**Why the reference data and not a list on the page.** A hand-written grouping would need
+editing every time a dataset is added, and would be wrong silently when someone forgot.
+`kind` is already there, already validated at load, and already how instruments are
+described. A new EIA dataset now lands in the right group with no change to the page or
+the endpoint.
+
+**Why separate tables rather than header rows inside one.** Each group's table repeats the
+same seven columns, so the groups stay comparable while the eye gets somewhere to stop. A
+test asserts the columns are identical across groups, because grouping would otherwise be
+an easy way to quietly lose that.
+
+**Consequence.** The order is a judgement, held in one dictionary in `data.py`: what a
+thing costs, then what it costs later, then how much of it there is, then how much is
+being made. Kinds EIA does not publish are simply absent rather than empty.

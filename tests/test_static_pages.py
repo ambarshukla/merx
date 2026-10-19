@@ -288,3 +288,19 @@ def test_a_link_can_open_a_series_at_a_past_date():
     assert r"/^\d{4}-\d{2}-\d{2}$/" in client, "a malformed date is ignored, not handed on"
     eia = (STATIC / "eia.html").read_text(encoding="utf-8")
     assert "asof=" in eia
+
+
+def test_the_eia_dataset_list_is_grouped_not_one_long_table():
+    """The groups are built from the response, and every group's table has the same
+    columns, or grouping them would stop them being comparable."""
+    body = (STATIC / "eia.html").read_text(encoding="utf-8")
+    style = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert '<div id="datasets"' in body, "the rows are grouped, so the table is built in JS"
+    assert '<table id="datasets"' not in body, "the single long table is gone"
+    # One label and one description per kind, and the kinds come from the response.
+    for kind in ("spot", "future_generic", "inventory", "production"):
+        assert f"{kind}:" in body, f"{kind} needs a heading on the page"
+    assert "d.kind" in body and "KIND[kind]" in body
+    # The heading, the count chip and the per-group spacing all need styling to exist.
+    for selector in (".group h3", ".group h3 .count", ".group + .group"):
+        assert selector in style, selector

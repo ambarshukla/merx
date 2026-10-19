@@ -1003,3 +1003,28 @@ URL is ignored rather than handed to the date input.
 **Worth repeating, because it cost time twice:** a stale `merx serve` from an earlier
 session was still bound to its port and answering with old code, so a new page 404ed that
 existed on disk. `netstat -ano | grep :<port>` first, every time.
+
+## The EIA table reads as four short lists (2026-10-19)
+
+Sixteen rows under one header was a wall. Worse, it flattened three different kinds of
+number into one shape: a daily price, a weekly storage level and a monthly production
+estimate behave nothing like each other, and the table said nothing about that.
+
+It is now four groups with headings and counts — **prices (6), futures (1), in storage
+(7), production (2)** — each with its own table and the same seven columns.
+
+The grouping is not written on the page. Every instrument in
+`reference/instruments.csv` already carries a `kind`, so the endpoint reports it per
+dataset and sorts the list into group order, and the page groups by the order it
+receives. A new EIA dataset therefore appears in the right group without touching
+either. The only judgement left in code is the order itself, which is one dictionary:
+what a thing costs, what it costs later, how much of it there is, how much is being
+made.
+
+Each group keeps its own copy of the column headings rather than being a header row in
+one long table. That costs a little vertical space and keeps the groups comparable, and
+a test asserts every group's columns are identical — grouping a table is an easy way to
+lose that without noticing.
+
+Checked in the rendered DOM: four groups, 6 + 1 + 7 + 2 = 16 rows, identical columns
+across all four, no stray empty table left behind. 238 tests.

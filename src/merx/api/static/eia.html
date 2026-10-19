@@ -70,15 +70,10 @@
     <div class="small muted prose">
       Every one of these is a contract file — a declaration of the URL, the series key,
       the unit, the release schedule and the rules to check — read by the same engine.
+      Grouped by what the series measures.
       <span id="channel-note"></span>
     </div>
-    <table id="datasets" style="margin-top:10px">
-      <thead><tr>
-        <th>Dataset</th><th>Sector</th><th>Channel</th><th>Frequency</th>
-        <th class="num">Values</th><th>Covers</th><th>Status</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
+    <div id="datasets" style="margin-top:12px"></div>
   </section>
 
   <section class="panel" id="findings-panel">
@@ -96,6 +91,14 @@
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const SECTOR_LABEL = { oil: "Oil", gas: "Gas", power: "Power", carbon: "Carbon",
   metals: "Metals", ags: "Agriculture" };
+// What each kind of series is, in words. The order comes from the response.
+const KIND = {
+  spot: ["Prices", "What a barrel or a million Btu changed hands for, by day."],
+  future_generic: ["Futures", "The price agreed today for delivery later."],
+  inventory: ["In storage", "How much is being held, and where. The weekly numbers the market waits for."],
+  production: ["Production", "How much is being brought out of the ground. Estimates, revised for years."],
+  other: ["Other", ""],
+};
 let overview = null, regionSeries = [], years = 2;
 
 function done() {
@@ -130,23 +133,41 @@ async function load() {
   done();
 }
 
+function datasetRow(d) {
+  const covers = d.first_date && d.last_date
+    ? `${d.first_date} to ${d.last_date}` : "not published";
+  return `<tr>
+    <td><a href="/client?dataset=${encodeURIComponent(d.id)}">${esc(d.title)}</a>
+      <div class="small muted">${esc(d.schedule)}</div></td>
+    <td>${esc(SECTOR_LABEL[d.sector] || d.sector)}</td>
+    <td>${d.channel === "api" ? "API" : "spreadsheet"}${
+      d.archive_backfill ? '<div class="small muted">archive history</div>' : ""}</td>
+    <td>${esc(d.frequency.replace("_", "-"))}</td>
+    <td class="num">${d.points == null ? "" : d.points.toLocaleString()}</td>
+    <td class="small">${esc(covers)}</td>
+    <td>${badge(d.quality_status)}</td>
+  </tr>`;
+}
+
 function renderDatasets() {
-  const rows = overview.datasets.map((d) => {
-    const covers = d.first_date && d.last_date
-      ? `${d.first_date} to ${d.last_date}` : "not published";
-    return `<tr>
-      <td><a href="/client?dataset=${encodeURIComponent(d.id)}">${esc(d.title)}</a>
-        <div class="small muted">${esc(d.schedule)}</div></td>
-      <td>${esc(SECTOR_LABEL[d.sector] || d.sector)}</td>
-      <td>${d.channel === "api" ? "API" : "spreadsheet"}${
-        d.archive_backfill ? '<div class="small muted">archive history</div>' : ""}</td>
-      <td>${esc(d.frequency.replace("_", "-"))}</td>
-      <td class="num">${d.points == null ? "" : d.points.toLocaleString()}</td>
-      <td class="small">${esc(covers)}</td>
-      <td>${badge(d.quality_status)}</td>
-    </tr>`;
-  });
-  document.querySelector("#datasets tbody").innerHTML = rows.join("");
+  // The response is already in the order the kinds should be listed in, so the groups
+  // are taken in the order they first appear rather than sorted again here.
+  const order = [...new Set(overview.datasets.map((d) => d.kind))];
+  document.getElementById("datasets").innerHTML = order.map((kind) => {
+    const rows = overview.datasets.filter((d) => d.kind === kind);
+    const [label, blurb] = KIND[kind] || KIND.other;
+    return `<section class="group">
+      <h3>${esc(label)} <span class="count">${rows.length}</span></h3>
+      ${blurb ? `<div class="small muted">${esc(blurb)}</div>` : ""}
+      <table>
+        <thead><tr>
+          <th>Dataset</th><th>Sector</th><th>Channel</th><th>Frequency</th>
+          <th class="num">Values</th><th>Covers</th><th>Status</th>
+        </tr></thead>
+        <tbody>${rows.map(datasetRow).join("")}</tbody>
+      </table>
+    </section>`;
+  }).join("");
 }
 
 function renderFindings() {
