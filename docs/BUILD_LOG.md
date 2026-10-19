@@ -937,3 +937,69 @@ forward from the moment the loss was noticed.
 only. That is the obvious next control, and the shape of the data says what it should
 look for — a release that rewrites two months is routine, and one that rewrites a hundred
 is an event worth an exception.
+
+## A page for one publisher, and five regions that do not add up (2026-10-19)
+
+"What is Lower 48?" turned into this. The Lower 48 is the contiguous states, and the
+reason a gas report says it is pipelines: Alaska and Hawaii are not connected to the North
+American network, so their gas cannot reach the market the price is set in. Which raised
+the obvious follow-up — the total is published as five regions, so where are they?
+
+**Five contracts, no new code.** East, Midwest, South Central, Mountain and Pacific, each
+a weekly file at the same URL pattern as the total, read by the same parser. Predictions
+were written down first. Two were wrong, and one of those was worth the whole exercise.
+
+**The parts do not add up to the whole.** The prediction was that five regions sum to the
+Lower 48 total every week, because that is what a breakdown means. Measured across all 876
+weeks: they match exactly **550 times, 63%**, and the rest are out by one or two Bcf. Every
+one of the eight series is published as a whole number of Bcf, including the total, so five
+independently rounded parts cannot be expected to match a separately rounded whole. The
+error is bounded at **2 Bcf on a total near 3,500 — 0.12%**, exactly what rounding five
+numbers predicts, and salt plus non-salt against South Central behaves identically within
+1 Bcf.
+
+This is a more useful result than the identity holding would have been. A balance check
+written on the assumption it holds would fail on 37% of weeks, and would be switched off
+within a fortnight. The page therefore *measures* the gap and states the tolerance a real
+check would need, rather than asserting an identity the data does not have. merx has no
+cross-dataset check yet — the existing `balance` check compares measures inside one
+dataset, and these are six datasets — so this is reported, not enforced, and the gap is
+named as a gap (D-031).
+
+**A check added and then removed.** The region contracts were first written with the lab's
+seasonal detector, reasoning that a region fills and empties on the same rhythm as the
+total. The first run flagged a recent value in Mountain and Pacific — the two smallest
+regions — and in none of the three large ones: two warning exceptions conjured out of
+nothing. The lab scored that detector on the Lower 48 total, not on a series a tenth the
+size. Keeping it would have meant asserting a threshold was good instead of knowing it,
+which is the one thing the quality lab exists to stop. The check came out, the contracts
+say why, and "score the detectors on regional storage" is now written down as the work
+that would earn it back.
+
+**The page.** `/eia` sits beside Data, Two sources and Operations. EIA is 16 of the 36
+datasets here, 13 through the bulk spreadsheets and 3 through the API, across oil and gas
+— and that concentration was invisible when the catalogue only sorted by commodity. The
+page carries the publisher's terms and credit line, every dataset with its release
+schedule and status, the findings that came out of EIA data, and the storage breakdown
+with its chart. A publisher page answers the question a data team actually gets asked:
+how much of this depends on one relationship, and what happens when that source changes
+its mind.
+
+**The header.** Four tabs pushed to the far edge of a 1,560 px page left nothing to anchor
+the eye, so the tabs now sit beside the name, and the name is a link back to the data.
+The taglines are gone from all four pages: each page already says what it is in its
+browser title, in its highlighted tab, and in a full sentence in its first panel, and the
+header line was the copy most likely to go stale — "published commodity data, with its
+history" had already outlived the project it described (D-032).
+
+**Verified.** 16 EIA datasets listed, the storage table showing all five regions summing
+to 3,567 against a published 3,567 for the week ending 2026-10-09, a five-line chart
+labelled in Bcf, three findings, and the identity sentence quoting 550 of 876 and 2 Bcf —
+all read out of the rendered DOM in jsdom, on all four pages, with the nav asserted on
+each. 236 tests. A deep link now carries a replay date, so a finding on the EIA page opens
+the series in the explorer at a date that still shows the problem; a malformed date in the
+URL is ignored rather than handed to the date input.
+
+**Worth repeating, because it cost time twice:** a stale `merx serve` from an earlier
+session was still bound to its port and answering with old code, so a new page 404ed that
+existed on disk. `netstat -ano | grep :<port>` first, every time.

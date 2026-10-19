@@ -4,6 +4,9 @@
   exceptions, values gone missing, reconciliation breaks, and the detector scores.
 * ``/client``: for people using the data. Only the published layer, each series with its
   quality status, its "as known on" history and its revisions.
+* ``/eia``: one publisher in full. EIA is the source of more of these datasets than
+  anyone else, through two independent channels, so it gets a page of its own — including
+  the five regions behind the Lower 48 storage number.
 
 The JSON behind both lives under ``/api``. Everything is read-only: changing anything
 (accepting a loss, assigning a root cause) is done with the ``merx`` command, which
@@ -80,6 +83,10 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     @app.api_route("/sources", methods=["GET", "HEAD"], include_in_schema=False)
     def sources_page():
         return FileResponse(STATIC / "sources.html")
+
+    @app.api_route("/eia", methods=["GET", "HEAD"], include_in_schema=False)
+    def eia_page():
+        return FileResponse(STATIC / "eia.html")
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -169,6 +176,12 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
         if c.reconcile_with is None:
             raise HTTPException(404, f"{dataset} is not reconciled with a second channel")
         return data.two_sources(store, c, by_id[c.reconcile_with.dataset], reference)
+
+    # --- one publisher in full -----------------------------------------------------
+    @app.get("/api/eia/overview")
+    @one_connection
+    def eia_overview():
+        return data.eia_overview(store, contracts, reference)
 
     @app.get("/api/client/series/{dataset}/revisions")
     @one_connection

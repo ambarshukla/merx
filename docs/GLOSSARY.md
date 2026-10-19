@@ -12,6 +12,7 @@ uses them.
 | **Asset check (Dagster)** | A test attached to an asset, recorded with its result and evidence on every run. Each check in a contract becomes one. |
 | **Backwardation** | A forward curve where later delivery is cheaper than nearer delivery, usually a sign of tight supply. |
 | **Balance check** | A check that an accounting identity holds on every date, e.g. open interest equals all long positions plus spreads. |
+| **Base gas** | The gas left permanently in a storage reservoir to keep it at usable pressure. It is not available to sell, and is not counted in EIA's weekly figure, which is working gas only. |
 | **Bcf** | Billion cubic feet, the unit for US natural gas volumes such as gas in storage. |
 | **Benchmarking revision** | A release that rewrites years of past values at once, because the publisher has replaced its own estimates with the figures states or companies finally reported. EIA's monthly production series do this roughly once a year; a routine monthly release changes only the last two months. |
 | **Bitemporal** | Storing two times per fact: when it applied (valid time) and when we learned it (knowledge time). |
@@ -79,6 +80,7 @@ uses them.
 | **Revision** | A published value replaced by a different one later, for the same date. A whole-history revision is usually a change of definition. |
 | **Root cause** | Why an exception happened, from a fixed list (source late, source format change, market event, pipeline bug and so on), assigned by a person. |
 | **Roll** | Moving from an expiring futures contract to the next one. A "generic" series such as front-month rolls by a stated rule. |
+| **Salt cavern** | Gas storage hollowed out of a salt dome, as opposed to a depleted gas field or an aquifer. It can be filled and emptied far faster, so EIA reports the South Central region split into salt and non-salt: the salt half is what moves in a cold snap. |
 | **Seeded defect** | A synthetic error deliberately injected into a copy of real data, and recorded, so detectors can be scored exactly. |
 | **Settlement price** | The exchange's official end-of-day price, used for margining. Distinct from the last traded price. |
 | **SHA-256** | A fingerprint of a file's bytes. Identical files share it; any change gives a different one. |
@@ -92,6 +94,7 @@ uses them.
 | **Spread position** | Holding both a long and a short futures position (e.g. in different months). Counted on both sides of open interest. |
 | **Staged table** | The typed, checked version of one dataset (`staged.<id>` in DuckDB), with each row linked to the raw file it came from. |
 | **Stale run (stuck feed)** | The same value repeated where it should have changed, usually because a feed stopped updating. |
+| **Storage region** | One of the five parts EIA divides Lower 48 gas storage into: East, Midwest, South Central, Mountain and Pacific. Each is published as its own weekly series, rounded to whole Bcf, which is why the five do not sum exactly to the published total (D-031). |
 | **Swap dealer** | In the COT report, banks and dealers that use futures to hedge swaps they have written for clients. |
 | **System price / market index price** | Two different GB electricity prices. The market index price is the day-ahead reference the exchanges report; the system price is what imbalances settle at afterwards. merx publishes the former. |
 | **Takeaway capacity** | How much a region's pipelines can carry out of it. Gas produced alongside oil has to go somewhere, so when production exceeds takeaway capacity the local price can turn negative: producers pay to have it taken away. |

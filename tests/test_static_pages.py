@@ -30,6 +30,7 @@ BUILTIN = {
     "function",
     "new",
     "await",
+    "async",
     "do",
     "else",
     "delete",
@@ -246,3 +247,44 @@ def test_the_browser_moves_aside_where_there_is_room():
     assert "main.explorer" in wide, "the two-column layout is for wide screens only"
     # A flex child only scrolls if it is allowed to be smaller than its content.
     assert "min-height: 0" in wide
+
+
+def test_every_page_has_the_same_tabs_beside_the_name():
+    """The name is the way back to the data, and the tabs sit next to it.
+
+    Four pages, one header. A tab missing from one page is the kind of thing nobody
+    notices until they are on that page and cannot get back.
+    """
+    style = (STATIC / "style.css").read_text(encoding="utf-8")
+    assert "header .brand" in style, "the name is a link now, and needs its own rule"
+    assert "margin-left: auto" not in style[style.index("header nav") :][:120], (
+        "the tabs sit beside the name, not pushed to the far side of the header"
+    )
+    expected = ["/client", "/sources", "/eia", "/ops"]
+    for page in PAGES:
+        body = page.read_text(encoding="utf-8")
+        header = body[body.index("<header") : body.index("</header>")]
+        assert '<a class="brand" href="/client">merx</a>' in header, page.name
+        assert re.findall(r'<a[^>]*href="(/[a-z]+)"', header)[1:] == expected, page.name
+        assert header.count('class="here"') == 1, f"{page.name}: one tab is the current one"
+        assert "published commodity data" not in body, f"{page.name}: the tagline is gone"
+        assert 'class="sub"' not in header, f"{page.name}: the tagline is gone"
+
+
+def test_the_eia_page_explains_the_rounding_rather_than_asserting_an_identity():
+    """The five regions do not sum to the published total, and the page says why."""
+    body = (STATIC / "eia.html").read_text(encoding="utf-8")
+    assert "do not add up to the whole, and that is correct" in body
+    assert "rounded to whole" in body
+    # Every number in that sentence comes from the response, not from the page.
+    assert "id.exact" in body and "id.weeks" in body and "id.worst_difference" in body
+    assert "550" not in body, "the measured figures belong in the query, not in the markup"
+
+
+def test_a_link_can_open_a_series_at_a_past_date():
+    """The EIA page's findings link into the explorer at a replay date, as the band does."""
+    client = (STATIC / "client.html").read_text(encoding="utf-8")
+    assert 'params.get("asof")' in client
+    assert r"/^\d{4}-\d{2}-\d{2}$/" in client, "a malformed date is ignored, not handed on"
+    eia = (STATIC / "eia.html").read_text(encoding="utf-8")
+    assert "asof=" in eia

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>merx · EIA</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="/client">merx</a>
+  <nav><a href="/client">Data</a><a href="/sources">Two sources</a><a class="here" href="/eia">EIA</a><a href="/ops">Operations</a></nav>
+</header>
+<main data-loading aria-busy="true">
+  <section class="panel prose">
+    <div class="small">
+      The <b>U.S. Energy Information Administration</b> is the statistical agency of the
+      US Department of Energy, and the single largest source of data here. It publishes
+      the same numbers through two independent channels — bulk <b>spreadsheet</b>
+      downloads and a keyed <b>JSON API</b> — which is what makes it possible to check a
+      publisher against itself. Most of the problems this project has caught were found
+      that way.
+      <span class="muted" id="attribution"></span>
+    </div>
+    <div class="kpis" id="kpis" style="margin-top:14px">
+      <!-- The shape of the page before its data arrives, in the markup so it is on
+           screen at first paint rather than after this page's script has run. -->
+      <span class="sk sk-line" style="width:120px"></span>
+      <span class="sk sk-line" style="width:120px"></span>
+      <span class="sk sk-line" style="width:120px"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="storage-panel">
+    <h2>Lower 48 gas storage, and the five regions behind it</h2>
+    <div class="small prose">
+      <p>
+        EIA's <b>Weekly Natural Gas Storage Report</b> is the number this market watches:
+        how much gas is in underground storage across the <b>Lower 48</b> — the
+        contiguous states, which behave as one connected pipeline system. Each value is
+        for the week ending Friday and is published the following Thursday at 10:30 ET.
+      </p>
+      <p>
+        The total is also published as five regions. They are not merely decoration: the
+        <b>South Central</b> region holds the salt caverns, which can be filled and
+        emptied far faster than depleted gas fields, so it moves most in a cold snap,
+        while the <b>East</b> and <b>Midwest</b> are where the winter heating demand
+        actually is.
+      </p>
+    </div>
+    <div class="row" style="justify-content: space-between; align-items: baseline; margin-top:10px">
+      <div class="small muted" id="storage-week"></div>
+      <span class="row" id="ranges">
+        <button data-years="2">2Y</button><button data-years="5">5Y</button>
+        <button data-years="0">All</button>
+      </span>
+    </div>
+    <div id="storage-chart" style="margin-top:6px"><span class="sk sk-chart"></span></div>
+    <table id="storage-table" style="margin-top:12px">
+      <thead><tr>
+        <th>Region</th><th class="num">Bcf</th><th class="num">Share</th><th>Dataset</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="small muted prose" id="identity" style="margin-top:10px"></div>
+  </section>
+
+  <section class="panel">
+    <h2>What merx takes from EIA</h2>
+    <div class="small muted prose">
+      Every one of these is a contract file — a declaration of the URL, the series key,
+      the unit, the release schedule and the rules to check — read by the same engine.
+      <span id="channel-note"></span>
+    </div>
+    <table id="datasets" style="margin-top:10px">
+      <thead><tr>
+        <th>Dataset</th><th>Sector</th><th>Channel</th><th>Frequency</th>
+        <th class="num">Values</th><th>Covers</th><th>Status</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel" id="findings-panel">
+    <h2>What the checks caught in EIA's data</h2>
+    <div class="small muted prose">
+      Derived from the exceptions, the point-in-time history and the reconciliations —
+      never written down here, so a finding leaves this page when it is closed.
+    </div>
+    <div id="findings" class="findings" style="margin-top:10px"></div>
+  </section>
+</main>
+<script src="/static/chart.js"></script>
+<script>
+"use strict";
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const SECTOR_LABEL = { oil: "Oil", gas: "Gas", power: "Power", carbon: "Carbon",
+  metals: "Metals", ags: "Agriculture" };
+let overview = null, regionSeries = [], years = 2;
+
+function done() {
+  const main = document.querySelector("main");
+  main.removeAttribute("data-loading");
+  main.setAttribute("aria-busy", "false");
+}
+
+async function load() {
+  overview = await getJSON("/api/eia/overview");
+  const p = overview.publisher, c = overview.counts;
+  if (p) {
+    document.getElementById("attribution").textContent =
+      `${p.attribution}. ${p.terms}`;
+  }
+  const kpi = (v, l) => `<div class="kpi"><div class="v">${v}</div><div class="l">${esc(l)}</div></div>`;
+  document.getElementById("kpis").innerHTML = [
+    kpi(c.datasets, `datasets from EIA, of ${c.of_all_datasets} in all`),
+    kpi(c.by_channel.spreadsheet || 0, "through the spreadsheets"),
+    kpi(c.by_channel.api || 0, "through the API"),
+    kpi(c.sectors.length, c.sectors.map((s) => SECTOR_LABEL[s] || s).join(" and ")),
+    kpi(overview.findings.length, "findings from EIA data"),
+  ].join("");
+  document.getElementById("channel-note").textContent = (c.by_channel.api || 0)
+    ? `Where a series appears in both channels they are reconciled value by value; ` +
+      `the Two sources page shows every difference.`
+    : "";
+
+  renderDatasets();
+  renderFindings();
+  await renderStorage();
+  done();
+}
+
+function renderDatasets() {
+  const rows = overview.datasets.map((d) => {
+    const covers = d.first_date && d.last_date
+      ? `${d.first_date} to ${d.last_date}` : "not published";
+    return `<tr>
+      <td><a href="/client?dataset=${encodeURIComponent(d.id)}">${esc(d.title)}</a>
+        <div class="small muted">${esc(d.schedule)}</div></td>
+      <td>${esc(SECTOR_LABEL[d.sector] || d.sector)}</td>
+      <td>${d.channel === "api" ? "API" : "spreadsheet"}${
+        d.archive_backfill ? '<div class="small muted">archive history</div>' : ""}</td>
+      <td>${esc(d.frequency.replace("_", "-"))}</td>
+      <td class="num">${d.points == null ? "" : d.points.toLocaleString()}</td>
+      <td class="small">${esc(covers)}</td>
+      <td>${badge(d.quality_status)}</td>
+    </tr>`;
+  });
+  document.querySelector("#datasets tbody").innerHTML = rows.join("");
+}
+
+function renderFindings() {
+  const f = overview.findings;
+  const panel = document.getElementById("findings-panel");
+  if (!f.length) {
+    document.getElementById("findings").innerHTML =
+      '<div class="small muted">Nothing open. Every control that has run on EIA data is passing.</div>';
+    return;
+  }
+  document.getElementById("findings").innerHTML = f.map((x) => {
+    const url = `/client?dataset=${encodeURIComponent(x.dataset)}` +
+      (x.asof ? `&asof=${encodeURIComponent(x.asof)}` : "");
+    return `<a class="finding" href="${url}" title="${esc(x.headline || "")}. ${esc(x.detail || "")}">
+      <span class="n">${esc(x.number)}</span>
+      <span class="l">${esc(x.label)}</span>
+      <span class="by">caught by the ${esc((x.caught_by || "").replace(/_/g, " "))} check</span></a>`;
+  }).join("");
+  panel.hidden = false;
+}
+
+async function renderStorage() {
+  const s = overview.storage;
+  const panel = document.getElementById("storage-panel");
+  if (!s) {
+    panel.hidden = true;
+    return;
+  }
+  document.getElementById("storage-week").textContent =
+    `Week ending ${s.week_ending} · Lower 48 total ${s.total.toLocaleString()} Bcf`;
+  document.querySelector("#storage-table tbody").innerHTML =
+    s.regions.map((r) => `<tr>
+      <td>${esc(r.label)}</td>
+      <td class="num">${r.value == null ? "" : r.value.toLocaleString()}</td>
+      <td class="num">${r.share_pct == null ? "" : r.share_pct + "%"}</td>
+      <td class="small"><a href="/client?dataset=${encodeURIComponent(r.dataset)}">${esc(r.dataset)}</a></td>
+    </tr>`).join("") +
+    `<tr>
+      <td><b>Sum of the five</b></td>
+      <td class="num"><b>${s.sum_of_regions.toLocaleString()}</b></td>
+      <td class="num"></td>
+      <td class="small muted">against the published total of ${s.total.toLocaleString()}${
+        s.difference ? `, a difference of ${s.difference > 0 ? "+" : ""}${s.difference}` : ", exactly"}</td>
+    </tr>`;
+
+  const id = s.identity;
+  document.getElementById("identity").innerHTML =
+    `<b>The parts do not add up to the whole, and that is correct.</b> Across all ` +
+    `${id.weeks.toLocaleString()} weeks both exist, the five regions sum to the published ` +
+    `Lower 48 total exactly ${id.exact.toLocaleString()} times — ` +
+    `${Math.round(id.exact / id.weeks * 100)}% — and are never off by more than ` +
+    `<b>${id.worst_difference} ${id.unit}</b> on a total near 3,500. Every series is ` +
+    `published rounded to whole ${id.unit}, including the total, so five rounded parts ` +
+    `cannot be expected to match a separately rounded whole. An identity check across ` +
+    `these six datasets would need a tolerance of ${id.worst_difference} ${id.unit}; ` +
+    `with zero tolerance it would fire on ${Math.round((1 - id.exact / id.weeks) * 100)}% ` +
+    `of weeks and tell nobody anything. merx has no cross-dataset check yet, so this one ` +
+    `is measured here rather than enforced.`;
+
+  const colors = ["--accent", "--accent-2", "--warn", "--ok", "--muted"];
+  regionSeries = await Promise.all(s.regions.map(async (r, i) => {
+    const data = await getJSON(`/api/client/series/${r.dataset}?measure=working_gas`);
+    return { name: r.label, color: css(colors[i % colors.length]), points: data.points };
+  }));
+  document.querySelectorAll("#ranges button").forEach((b) =>
+    (b.onclick = () => { years = +b.dataset.years; drawStorage(); }));
+  window.addEventListener("resize", () => regionSeries.length && drawStorage());
+  drawStorage();
+}
+
+function drawStorage() {
+  document.querySelectorAll("#ranges button").forEach((b) =>
+    (b.style.fontWeight = +b.dataset.years === years ? "700" : ""));
+  let series = regionSeries;
+  if (years) {
+    const last = regionSeries[0].points[regionSeries[0].points.length - 1][0];
+    const from = new Date(last + "T00:00:00Z");
+    from.setUTCFullYear(from.getUTCFullYear() - years);
+    const start = from.toISOString().slice(0, 10);
+    series = regionSeries.map((s) => ({ ...s, points: s.points.filter(([d]) => d >= start) }));
+  }
+  lineChart(document.getElementById("storage-chart"), series, { unit: "Bcf" });
+}
+
+load().catch((e) => {
+  done();
+  document.querySelector("main").innerHTML = `<section class="panel">
+    <h2>This page could not load its data</h2>
+    <div class="small">
+      <p>The site is up — this is the published data behind it that did not answer.
+        It is usually a pipeline run holding the database for a moment; reloading in a
+        few seconds normally works.</p>
+      <p class="muted">${esc(e.message || e)}</p>
+    </div>
+    <div class="row" style="margin-top:10px"><button onclick="location.reload()">
+      Try again</button></div>
+  </section>`;
+});
+</script>
+</body>
+</html>

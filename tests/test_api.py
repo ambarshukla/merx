@@ -156,8 +156,15 @@ def test_the_schedule_is_given_in_words(client):
 
 
 def test_pages_and_assets_are_served(client):
-    assert "operations console" in client.get("/ops").text
-    assert "published commodity data" in client.get("/client").text
+    # Each page is identified by its title rather than by a tagline in the header: the
+    # headers now carry only the name and the tabs.
+    for path, title in (
+        ("/client", "merx \u00b7 data"),
+        ("/sources", "merx \u00b7 two sources"),
+        ("/eia", "merx \u00b7 EIA"),
+        ("/ops", "merx \u00b7 operations"),
+    ):
+        assert f"<title>{title}</title>" in client.get(path).text, path
     assert "lineChart" in client.get("/static/chart.js").text
     assert client.get("/", follow_redirects=False).status_code in (302, 307)
 
@@ -171,7 +178,7 @@ def test_an_empty_data_directory_is_read_without_being_created(tmp_path):
 
 def test_pages_answer_head_requests_too(client):
     # Link previews and uptime monitors check a page with HEAD before fetching it.
-    for path in ("/client", "/sources", "/ops"):
+    for path in ("/client", "/sources", "/eia", "/ops"):
         assert client.head(path).status_code == 200
 
 
