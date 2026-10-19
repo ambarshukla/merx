@@ -8,8 +8,8 @@
 </head>
 <body>
 <header>
-  <h1>merx</h1><span class="sub">published commodity data, with its history</span>
-  <nav><a class="here" href="/client">Data</a><a href="/sources">Two sources</a><a href="/ops">Operations</a></nav>
+  <a class="brand" href="/client">merx</a>
+  <nav><a class="here" href="/client">Data</a><a href="/sources">Two sources</a><a href="/eia">EIA</a><a href="/ops">Operations</a></nav>
 </header>
 <main class="explorer" data-loading aria-busy="true">
   <section class="panel full" id="findings-panel">
@@ -326,7 +326,13 @@ async function load() {
     types.map((t) => `<option value="${t}">${esc(TYPE_LABEL[t] || t)} only</option>`).join("");
   filter.onchange = () => { dataType = filter.value; drawCatalog(); };
 
-  const start = new URLSearchParams(location.search).get("dataset") || "eia_us_crude_stocks";
+  const params = new URLSearchParams(location.search);
+  const start = params.get("dataset") || "eia_us_crude_stocks";
+  // A link from elsewhere in the site can open a series at a past date, the way the
+  // findings band does. Only a plain yyyy-mm-dd is accepted; anything else is ignored
+  // rather than handed to the date input, which would silently clear itself.
+  const asof = params.get("asof");
+  if (asof && /^\d{4}-\d{2}-\d{2}$/.test(asof)) document.getElementById("asof").value = asof;
   current = catalog.find((c) => c.id === start) || catalog[0];
   document.querySelectorAll("#ranges button").forEach((b) =>
     (b.onclick = () => { years = +b.dataset.years; draw(); }));

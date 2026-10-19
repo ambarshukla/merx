@@ -43,9 +43,14 @@ header {
   display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
   padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel);
 }
-header h1 { margin: 0; font-size: 18px; }
-header .sub { color: var(--muted); }
-header nav { margin-left: auto; display: flex; gap: 14px; }
+/* The name is the way back to the data, so it is a link and looks like the heading it
+   replaced. The tabs sit directly beside it rather than across the page: with four of
+   them, a split header made the current page hard to find. */
+header .brand {
+  margin: 0; font-size: 18px; font-weight: 700; color: var(--ink); text-decoration: none;
+}
+header .brand:hover { color: var(--accent); }
+header nav { display: flex; gap: 14px; }
 header nav a { color: var(--accent); text-decoration: none; }
 header nav a.here { color: var(--ink); font-weight: 600; }
 main { padding: 20px 24px 48px; max-width: 1560px; margin: 0 auto; }

@@ -816,3 +816,75 @@ worth asserting here precisely because it has never fired.
 matter of routine rather than through loss: January 2015 Texas gas production was
 published as 653,831 MMcf and now reads 666,792. Nothing yet *notices* a revision — no
 check looks at one — which is the obvious next control to build.
+
+## D-031: One publisher gets a page, and the identity is measured rather than enforced (2026-10-19)
+
+**Context.** EIA is the source of 16 of the 36 datasets here, across both oil and gas,
+through two independent channels, and most of the project's findings came from it. Spread
+across the catalogue, none of that was visible: the client page lists datasets by sector,
+so the fact that one agency's output dominates — and that it can be checked against
+itself — was somewhere between implicit and invisible.
+
+**Decision.** A fourth page, `/eia`, built from `/api/eia/overview`. It carries the
+publisher's terms and credit line, the count of datasets by channel and sector, every EIA
+dataset with its schedule and status, the findings that came from EIA data, and the Lower
+48 gas storage total broken into the five regions EIA publishes.
+
+**Why a publisher page and not another sector.** The catalogue answers "what is there, by
+commodity". This answers "who is this from, and how much of the project leans on one
+relationship" — which is the question a data team is actually asked when a source changes
+its format, its licence or its mind. It also makes the two-channel story legible: 13
+datasets through the spreadsheets, 3 through the API, with the overlapping ones reconciled
+value by value.
+
+**The five regions, and why they do not add up.** EIA publishes the Lower 48 storage total
+and its five regions (East, Midwest, South Central, Mountain, Pacific) as six separate
+weekly files, each rounded to whole Bcf. Measured over all 876 shared weeks on 2026-10-19:
+the five regions sum to the published total exactly 550 times (63%), and are **never more
+than 2 Bcf out** on a total near 3,500 — 0.12% at worst. Salt plus non-salt against South
+Central behaves the same way, within 1 Bcf.
+
+That is rounding, not disagreement, and it is a useful thing to be able to say. A balance
+check with no tolerance would fail on 37% of weeks and teach nobody anything; one with a
+2 Bcf tolerance would pass. merx has no cross-dataset check — the existing `balance` check
+compares measures *within* one dataset, and these are six datasets — so the arithmetic is
+done in the query and **reported on the page as a measurement**, with the tolerance a
+future check would need stated. Measuring and saying so beats both asserting a false
+identity and quietly not mentioning it.
+
+**No anomaly check on the regions, and that was a reversal.** The five contracts were
+first written with the lab's seasonal detector, by analogy with the Lower 48 total: a
+region fills and empties on the same annual rhythm. On the first run it flagged a recent
+value in **Mountain and Pacific, the two smallest regions, and in none of the three large
+ones** — two warning-level exceptions out of nothing. The lab scored that detector on the
+total, not on a series holding a tenth of the volume, so keeping the check would have been
+asserting a threshold is good rather than knowing it, which is precisely what
+`docs/DQ_LAB.md` exists to prevent. The check was removed and the five contracts carry
+`in_quality_lab: false` with the evidence written in. Scoring the detectors on regional
+storage is the work that earns it back.
+
+**Consequence.** The header had to change (D-032), because four tabs pushed to the far
+side of the page made the current one hard to find.
+
+## D-032: The name is the way home, and the tabs sit beside it (2026-10-19)
+
+**Context.** The header was the name, a tagline, and three tabs pushed to the opposite
+edge by `margin-left: auto`. A fourth tab made the split worse: with the name on the far
+left and four links on the far right, there was nothing to anchor the eye, and on a
+1,560 px page the current tab could be half a metre from the title.
+
+**Decision.** The tabs sit immediately beside the name. The name itself is a link to
+`/client`, the page the data lives on, so it does the job a logo is expected to do. The
+taglines are gone from all four pages.
+
+**Why the taglines go.** Each page already announces itself twice — the browser tab title
+and the highlighted nav link — and each page's first panel explains what it is in a full
+sentence. A third version in the header was the one most likely to drift out of date, and
+the "published commodity data, with its history" line had already outlived the project it
+described. Removing it also removes the question of what the EIA page's tagline should be.
+
+**Consequence.** `header .sub` is dead CSS and is removed; `header h1` becomes
+`header .brand`, an anchor styled to look like the heading it replaced, with a hover
+colour so it reads as clickable. A test asserts all four pages carry the same four tabs,
+exactly one marked as current, and no tagline — because a tab missing from one page is
+only noticed by someone already stuck on it.

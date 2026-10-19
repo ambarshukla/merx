@@ -27,3 +27,8 @@ cftc,111659,RBOB_NYMEX_FUTURES,GASOLINE RBOB - NEW YORK MERCANTILE EXCHANGE,Mark
 cftc,022651,ULSD_NYMEX_FUTURES,NY HARBOR ULSD - NEW YORK MERCANTILE EXCHANGE,Market code verified against the 2026 disaggregated file on 2026-10-16
 eia,MCRFPTX1,TX_CRUDE_PRODUCTION,"Texas Field Production of Crude Oil (Thousand Barrels)",
 eia,N9050TX2,TX_GAS_MARKETED_PRODUCTION,"Texas Natural Gas Marketed Production (MMcf)",
+eia,NW2_EPG0_SWO_R31_BCF,US_GAS_STORAGE_EAST,"Weekly East Region Natural Gas Working Underground Storage (Billion Cubic Feet)",
+eia,NW2_EPG0_SWO_R32_BCF,US_GAS_STORAGE_MIDWEST,"Weekly Midwest Region Natural Gas Working Underground Storage (Billion Cubic Feet)",
+eia,NW2_EPG0_SWO_R33_BCF,US_GAS_STORAGE_SOUTH_CENTRAL,"Weekly South Central  Region Natural Gas Working Underground Storage (Billion Cubic Feet)",
+eia,NW2_EPG0_SWO_R34_BCF,US_GAS_STORAGE_MOUNTAIN,"Weekly Mountain Region Natural Gas Working Underground Storage (Billion Cubic Feet)",
+eia,NW2_EPG0_SWO_R35_BCF,US_GAS_STORAGE_PACIFIC,"Weekly Pacific Region Natural Gas Working Underground Storage (Billion Cubic Feet)",

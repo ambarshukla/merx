@@ -1034,3 +1034,147 @@ def findings(store: Store, contracts: list[Contract]) -> list[dict]:
             }
         )
     return out
+
+
+# The five regions EIA divides the Lower 48 into, in the order it lists them, with the
+# dataset each one is published as here. The Lower 48 total is published separately and
+# is not one of the parts.
+STORAGE_REGIONS: list[tuple[str, str]] = [
+    ("eia_gas_storage_east", "East"),
+    ("eia_gas_storage_midwest", "Midwest"),
+    ("eia_gas_storage_south_central", "South Central"),
+    ("eia_gas_storage_mountain", "Mountain"),
+    ("eia_gas_storage_pacific", "Pacific"),
+]
+STORAGE_TOTAL = "eia_us_gas_storage"
+
+
+def storage_regions(store: Store) -> dict | None:
+    """The Lower 48 storage total beside the five regions it is made of.
+
+    The arithmetic is done here rather than written down anywhere, so the page cannot
+    claim a figure the tables do not hold (D-027). The parts do not add up to the whole
+    exactly, because EIA rounds every series to whole Bcf independently; how far off they
+    are is measured over the whole history rather than asserted.
+    """
+    present = [(d, label) for d, label in STORAGE_REGIONS if store.has("published", d)]
+    if not present or not store.has("published", STORAGE_TOTAL):
+        return None
+
+    # The latest week every one of the six datasets has published, so the breakdown is of
+    # one week rather than of whichever week each series happens to reach.
+    tables = [STORAGE_TOTAL] + [d for d, _ in present]
+    shared = " INTERSECT ".join(
+        f'SELECT valid_date FROM published."{t}" WHERE value IS NOT NULL' for t in tables
+    )
+    week = store.query(f"SELECT max(valid_date) FROM ({shared})")[0][0]
+    if week is None:
+        return None
+
+    def value_at(dataset: str) -> float | None:
+        rows = store.query(f'SELECT value FROM published."{dataset}" WHERE valid_date = ?', [week])
+        return rows[0][0] if rows else None
+
+    total = value_at(STORAGE_TOTAL)
+    regions = []
+    for dataset, label in present:
+        value = value_at(dataset)
+        regions.append(
+            {
+                "dataset": dataset,
+                "label": label,
+                "value": value,
+                "share_pct": round(value / total * 100, 1) if value and total else None,
+            }
+        )
+    parts = sum(r["value"] for r in regions if r["value"] is not None)
+
+    # How well the identity holds across the whole history: one row per week, the sum of
+    # the regions beside the published total.
+    sums = " UNION ALL ".join(f'SELECT valid_date, value FROM published."{d}"' for d, _ in present)
+    identity = store.query(
+        "SELECT count(*), count(*) FILTER (WHERE diff = 0), max(abs(diff)) FROM ("
+        f"  SELECT t.valid_date, sum(p.value) - any_value(t.value) AS diff"
+        f'  FROM published."{STORAGE_TOTAL}" t JOIN ({sums}) p USING (valid_date)'
+        "  GROUP BY t.valid_date HAVING count(*) = ?)",
+        [len(present)],
+    )[0]
+    weeks, exact, worst = identity
+
+    return {
+        "week_ending": _iso(week),
+        "total": total,
+        "total_dataset": STORAGE_TOTAL,
+        "regions": regions,
+        "sum_of_regions": parts,
+        "difference": None if total is None else round(parts - total, 6),
+        "complete": len(present) == len(STORAGE_REGIONS),
+        "identity": {
+            "weeks": weeks,
+            "exact": exact,
+            "worst_difference": worst,
+            "unit": "Bcf",
+        },
+    }
+
+
+def eia_overview(store: Store, contracts: list[Contract], reference: Reference) -> dict:
+    """Everything this project takes from one publisher, on one page.
+
+    EIA is the source of more datasets here than any other, across both of merx's
+    oil-and-gas sectors and through two independent channels (bulk spreadsheets and a
+    JSON API), which is also why most of the findings came from it.
+    """
+    provider = reference.providers.get("eia")
+    mine = [c for c in contracts if c.source.provider == "eia"]
+    catalog = {d["id"]: d for d in published_catalog(store, mine, reference)}
+    datasets = []
+    for c in sorted(mine, key=lambda c: (c.domain, c.id)):
+        entry = catalog.get(c.id, {})
+        datasets.append(
+            {
+                "id": c.id,
+                "title": c.title,
+                "sector": entry.get("sector", c.domain),
+                "frequency": c.frequency,
+                "tier": c.tier,
+                "unit": c.unit,
+                "measures": entry.get("measures", c.measures),
+                "quality_status": entry.get("quality_status"),
+                "published": c.id in catalog,
+                "first_date": entry.get("first_date"),
+                "last_date": entry.get("last_date"),
+                "points": entry.get("points"),
+                "changed_values_in_history": entry.get("changed_values_in_history"),
+                "schedule": schedule_in_words(c),
+                # Which of EIA's two channels this comes through: the format says it.
+                "channel": "api" if c.source.format == "eia_api_v2" else "spreadsheet",
+                "archive_backfill": c.source.archive_backfill,
+            }
+        )
+    by_channel: dict[str, int] = {}
+    for d in datasets:
+        by_channel[d["channel"]] = by_channel.get(d["channel"], 0) + 1
+    return {
+        "publisher": None
+        if provider is None
+        else {
+            "id": provider.provider_id,
+            "name": provider.name,
+            "access": provider.access,
+            "terms": provider.terms,
+            "terms_url": provider.terms_url,
+            "attribution": provider.attribution,
+        },
+        "counts": {
+            "datasets": len(datasets),
+            "published": sum(1 for d in datasets if d["published"]),
+            "of_all_datasets": len(contracts),
+            "sectors": sorted({d["sector"] for d in datasets}),
+            "by_channel": by_channel,
+        },
+        "datasets": datasets,
+        "storage": storage_regions(store),
+        # Only the findings that came out of EIA data, so the page stands on its own.
+        "findings": [f for f in findings(store, contracts) if f["dataset"] in catalog],
+    }

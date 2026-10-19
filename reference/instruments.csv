@@ -27,3 +27,8 @@ RBOB_NYMEX_FUTURES,Rbob gasoline futures market (New York Mercantile Exchange) a
 ULSD_NYMEX_FUTURES,Diesel futures market (New York Mercantile Exchange) as reported for positioning,diesel,oil,futures_market,positioning,United States,contracts
 TX_CRUDE_PRODUCTION,Texas field production of crude oil,crude_oil,oil,production,physical,Texas US,kbbl
 TX_GAS_MARKETED_PRODUCTION,Texas marketed production of natural gas,natural_gas,gas,production,physical,Texas US,MMcf
+US_GAS_STORAGE_EAST,US East region natural gas working gas in underground storage,natural_gas,gas,inventory,fundamental,East Region US,Bcf
+US_GAS_STORAGE_MIDWEST,US Midwest region natural gas working gas in underground storage,natural_gas,gas,inventory,fundamental,Midwest Region US,Bcf
+US_GAS_STORAGE_SOUTH_CENTRAL,US South Central region natural gas working gas in underground storage,natural_gas,gas,inventory,fundamental,South Central Region US,Bcf
+US_GAS_STORAGE_MOUNTAIN,US Mountain region natural gas working gas in underground storage,natural_gas,gas,inventory,fundamental,Mountain Region US,Bcf
+US_GAS_STORAGE_PACIFIC,US Pacific region natural gas working gas in underground storage,natural_gas,gas,inventory,fundamental,Pacific Region US,Bcf
