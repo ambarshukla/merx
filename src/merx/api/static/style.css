@@ -112,6 +112,21 @@ code { font-size: 12px; }
 @keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .sk, .sk-card { animation: none; } }
 
+/* --- a long table broken into named groups --------------------------------------
+   Sixteen rows under one header is a wall of text. Each group gets a heading and its
+   own table, so the eye has somewhere to stop; the columns still line up because every
+   group's table has the same ones. */
+.group + .group { margin-top: 18px; }
+.group h3 {
+  font-size: 13px; margin: 0 0 2px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); font-weight: 600;
+}
+.group h3 .count {
+  color: var(--ink); background: var(--line); border-radius: 999px; padding: 0 7px;
+  margin-left: 4px; font-size: 11px; letter-spacing: 0;
+}
+.group table { margin-top: 6px; }
+
 /* --- sector navigation and the dataset catalogue ------------------------------- */
 .sectors { display: flex; flex-wrap: wrap; gap: 6px; }
 .sectors button {

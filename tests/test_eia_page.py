@@ -136,3 +136,26 @@ def test_a_missing_region_does_not_fake_the_identity(tmp_path):
     assert len(s["regions"]) == len(STORAGE_REGIONS) - 1
     assert s["sum_of_regions"] == 640.0
     assert s["difference"] == -60.0
+
+
+def test_datasets_carry_what_they_measure_and_come_grouped(tmp_path):
+    """Sixteen rows in one table is a wall; the page splits them by what each measures.
+
+    The grouping is on the instrument's `kind`, which already exists in
+    reference/instruments.csv, so adding a dataset puts it in the right group with no
+    change here. The response is ordered, and the page groups in the order it receives.
+    """
+    body = TestClient(create_app(tmp_path / "data")).get("/api/eia/overview").json()
+    kinds = [d["kind"] for d in body["datasets"]]
+    assert all(kinds), "every dataset says what it measures"
+    # What a thing costs, then what it costs later, then how much there is, then how
+    # much is being made. Kinds EIA does not publish are simply absent.
+    expected = ["spot", "future_generic", "inventory", "production"]
+    first_seen = list(dict.fromkeys(kinds))
+    assert first_seen == [k for k in expected if k in first_seen]
+    # Each kind appears in one run, so the page can group by first appearance.
+    assert kinds == sorted(kinds, key=first_seen.index)
+    by_kind = body["counts"]["by_kind"]
+    assert sum(by_kind.values()) == len(body["datasets"])
+    assert by_kind["spot"] >= 6, "three spot prices, each in two channels"
+    assert by_kind["inventory"] >= 7, "crude stocks, gas storage and its five regions"

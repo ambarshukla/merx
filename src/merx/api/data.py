@@ -1118,6 +1118,17 @@ def storage_regions(store: Store) -> dict | None:
     }
 
 
+# The order the kinds of series are listed in on the EIA page: what a thing costs, then
+# what it costs later, then how much of it there is, then how much is being made. The page
+# supplies the words; this is only the order, and an unknown kind sorts last.
+KIND_ORDER = {"spot": 0, "future_generic": 1, "inventory": 2, "production": 3}
+
+
+def _kind(reference: Reference, contract: Contract) -> str:
+    instrument = reference.instruments.get(contract.instrument)
+    return instrument.kind if instrument else "other"
+
+
 def eia_overview(store: Store, contracts: list[Contract], reference: Reference) -> dict:
     """Everything this project takes from one publisher, on one page.
 
@@ -1129,13 +1140,16 @@ def eia_overview(store: Store, contracts: list[Contract], reference: Reference) 
     mine = [c for c in contracts if c.source.provider == "eia"]
     catalog = {d["id"]: d for d in published_catalog(store, mine, reference)}
     datasets = []
-    for c in sorted(mine, key=lambda c: (c.domain, c.id)):
+    for c in sorted(mine, key=lambda c: (KIND_ORDER.get(_kind(reference, c), 99), c.domain, c.id)):
         entry = catalog.get(c.id, {})
         datasets.append(
             {
                 "id": c.id,
                 "title": c.title,
                 "sector": entry.get("sector", c.domain),
+                # What the series measures, from reference/instruments.csv. Sixteen rows in
+                # one table is a wall; grouped by this it reads as four short lists.
+                "kind": _kind(reference, c),
                 "frequency": c.frequency,
                 "tier": c.tier,
                 "unit": c.unit,
@@ -1153,8 +1167,10 @@ def eia_overview(store: Store, contracts: list[Contract], reference: Reference) 
             }
         )
     by_channel: dict[str, int] = {}
+    by_kind: dict[str, int] = {}
     for d in datasets:
         by_channel[d["channel"]] = by_channel.get(d["channel"], 0) + 1
+        by_kind[d["kind"]] = by_kind.get(d["kind"], 0) + 1
     return {
         "publisher": None
         if provider is None
@@ -1172,6 +1188,7 @@ def eia_overview(store: Store, contracts: list[Contract], reference: Reference) 
             "of_all_datasets": len(contracts),
             "sectors": sorted({d["sector"] for d in datasets}),
             "by_channel": by_channel,
+            "by_kind": by_kind,
         },
         "datasets": datasets,
         "storage": storage_regions(store),
