@@ -1,0 +1,51 @@
+# Natural gas in underground storage in EIA's Midwest region, weekly.
+#
+# One of the five regions EIA divides the Lower 48 into. Each value is for the week
+# ending Friday and is published the following Thursday at 10:30 ET, in the same release
+# as the Lower 48 total (eia_us_gas_storage).
+#
+# The other big consuming region, and the largest store of depleted-field capacity.
+#
+# The five regions are published rounded to whole Bcf, and so is the total, so the parts
+# do not add up to the whole exactly: measured over all 876 weeks on 2026-10-19, the sum
+# of the regions differs from the published total by -2 to +2 Bcf, and matches exactly in
+# 550 of them. That is rounding, not disagreement — 0.12% at worst. An identity check
+# across these six datasets would therefore need a tolerance of 2 Bcf, and merx has no
+# cross-dataset check yet (D-031).
+id: eia_gas_storage_midwest
+title: Midwest region natural gas working storage, weekly
+domain: gas
+owner: gas-data-steward
+# Tier 2, not 1: the Lower 48 total is the number the market trades on, and these are
+# the detail behind it.
+tier: 2
+frequency: weekly
+instrument: US_GAS_STORAGE_MIDWEST
+unit: Bcf
+measures: [working_gas]
+source:
+  provider: eia
+  format: eia_hist_xls
+  url: https://www.eia.gov/dnav/ng/hist_xls/NW2_EPG0_SWO_R32_BCFw.xls
+  series_key: NW2_EPG0_SWO_R32_BCF
+  archive_backfill: true
+schedule:
+  # Fetched Thursday at noon ET, 90 minutes after the 10:30 release, like the total.
+  cron: "0 12 * * 4"
+  timezone: America/New_York
+checks:
+  - {type: not_null, column: value}
+  - {type: unique, columns: [measure, valid_date]}
+  # The regions are a fraction of the Lower 48's ~5,000 Bcf ceiling, but a single bound
+  # covers all five rather than five hand-tuned ones.
+  - {type: range, column: value, min: 0, max: 5000}
+  - {type: freshness, max_age_days: 14}
+  - {type: no_withdrawals}
+# No anomaly check. The lab's seasonal recommendation was scored on the Lower 48 total
+# (docs/DQ_LAB.md), not on a region holding a tenth of the volume, and the difference
+# shows: run with that detector on 2026-10-19 it flagged a recent value in both Mountain
+# and Pacific, the two smallest regions, and in none of the three large ones. A detector
+# whose precision has not been measured on this shape would be asserting a threshold is
+# good rather than knowing it, which is the thing the lab exists to prevent. Scoring the
+# detectors on regional storage is the work that would earn this check back.
+in_quality_lab: false
