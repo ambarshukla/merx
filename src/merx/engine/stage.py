@@ -6,6 +6,9 @@ in long form, one row per (measure, valid_date). Each row carries the raw file i
 from and when that file was fetched (its knowledge time), which is what the
 point-in-time store will build on.
 
+A row's knowledge time is when its file was fetched, except where the file proves
+that moment wrong: see ``knowledge_time_for``.
+
 Every row carries a ``period``: 0 for daily-and-coarser data, meaning "the whole day",
 and 1..n for data settled in numbered periods within a day. Keeping it non-null (rather
 than null for daily data) means every key, join and grouping in the engine works the
@@ -58,6 +61,28 @@ class StageResult:
     measures: list[str]
 
 
+def knowledge_time_for(landed: LandedFile, read: ReadResult) -> datetime:
+    """When we could first have known this file's contents.
+
+    For a file we downloaded, that is when we fetched it. For a copy taken from a web
+    archive it is the capture time — unless the file states a release date later than
+    its own capture, which is impossible and means the capture time is wrong. Observed
+    2026-10-18: the archive's oldest copy of EIA's Texas gas production spreadsheet is
+    stamped 2011-07-06 and holds a file whose Contents sheet says it was released
+    2017-01-31. Trusting the stamp would place five years of later revisions before the
+    values they replaced, and "as known on" would answer with data from the future.
+
+    Where the release date is used it is taken as midnight UTC, because a release date
+    is a date; that is earlier than the real moment within the day, which keeps it a
+    lower bound on when the content could have been known.
+    """
+    fetched = landed.fetched_at_utc
+    if landed.origin != "archive" or read.release_date is None:
+        return fetched
+    released = datetime.combine(read.release_date, datetime.min.time())
+    return released if released > fetched else fetched
+
+
 def staged_table(contract: Contract) -> str:
     return f'staged."{contract.id}"'
 
@@ -96,6 +121,7 @@ def stage(
     unexpected = {obs.measure for obs, _ in rows_in} - set(contract.measures)
     if unexpected:
         raise ValueError(f"{contract.id}: file produced undeclared measures {sorted(unexpected)}")
+    knowledge = {landed.path: knowledge_time_for(landed, read) for landed, read in parts}
     n = len(rows_in)
     build_id = build_id_for(contract.id, [landed.path for landed, _ in parts])
     table = pa.table(
@@ -110,7 +136,7 @@ def stage(
             "value": pa.array([o.value for o, _ in rows_in], pa.float64()),
             "unit": [contract.unit_for(o.measure) for o, _ in rows_in],
             "knowledge_time_utc": pa.array(
-                [f.fetched_at_utc for _, f in rows_in], pa.timestamp("us")
+                [knowledge[f.path] for _, f in rows_in], pa.timestamp("us")
             ),
             "raw_sha256": [f.sha256 for _, f in rows_in],
             "raw_path": [f.path for _, f in rows_in],

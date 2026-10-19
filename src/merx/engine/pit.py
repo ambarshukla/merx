@@ -1,8 +1,9 @@
 """Point-in-time history: every version of every value, and when it was known.
 
 Each value has two times. Its *valid date* is the date it describes. Its *knowledge
-time* is when it became known: the fetch time of the raw file it first appeared in (or,
-for an archived copy, the archive's capture time). Replaying every raw file of a dataset
+time* is when it became known: the fetch time of the raw file it first appeared in, or
+for an archived copy the archive's capture time unless the file disproves it
+(``knowledge_time_for``, D-029). Replaying every raw file of a dataset
 in knowledge-time order gives, for each (measure, valid date), a sequence of versions:
 
     value, known_from_utc, known_to_utc, ended_by
@@ -25,6 +26,7 @@ import pyarrow as pa
 
 from merx.contracts import Contract
 from merx.engine import formats
+from merx.engine.stage import knowledge_time_for
 from merx.store.raw import RawZone
 
 
@@ -49,9 +51,22 @@ def replay(contract: Contract, zone: RawZone) -> list[tuple]:
     ended_by, raw_path, origin), from every raw file in knowledge-time order."""
     rows: list[tuple] = []
     current: dict[tuple[str | None, str, date, int], _Open] = {}
+    previous: tuple[datetime, str] | None = None
     for landed in zone.history(contract.id):
-        observations = formats.read(zone.read(landed), contract, landed.partition).observations
-        at = landed.fetched_at_utc
+        read = formats.read(zone.read(landed), contract, landed.partition)
+        observations = read.observations
+        at = knowledge_time_for(landed, read)
+        # The raw zone hands files over in fetch order, and the correction above only
+        # ever moves a knowledge time later, so it can in principle push one file past
+        # the next. Nothing in the data does that (checked across every archived dataset
+        # on 2026-10-18), and a replay out of knowledge order would silently invent
+        # revisions, so it stops the rebuild rather than guessing.
+        if previous is not None and at < previous[0]:
+            raise ValueError(
+                f"{contract.id}: {landed.path} is known at {at}, before {previous[1]} "
+                f"at {previous[0]}; replay needs knowledge order"
+            )
+        previous = (at, landed.path)
         seen: set[tuple[str | None, str, date, int]] = set()
         for obs in observations:
             key = (landed.partition, obs.measure, obs.valid_date, obs.period)

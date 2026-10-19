@@ -752,3 +752,67 @@ media query describes.
 which makes prose lines too long; the prose panels are capped with `max-width` in `ch`.
 The sidebar hides the card tags, so that information exists only in the detail panel on
 wide screens — acceptable, because the detail panel is always on screen beside it.
+
+## D-029: Knowledge time is the capture time unless the file disproves it (2026-10-18)
+
+**Context.** Every value in the point-in-time store carries a knowledge time: the moment
+we could first have known it. For a file this project downloaded, that is when it was
+fetched. For a copy pulled out of the Wayback Machine, it has been the archive's capture
+timestamp.
+
+**What went wrong with that.** The archive's oldest copy of EIA's Texas gas production
+spreadsheet is stamped `20110706180905`, and the file it holds says on its own Contents
+sheet that it was released 2017-01-31. A file cannot be captured five and a half years
+before it was published, so one of the two is wrong, and it is not the one inside the
+file. Trusting the stamp put five years of later revisions *before* the values they
+replaced, and "as known on 2011-07-06" answered with data from 2017.
+
+**Decision.** `merx.engine.stage.knowledge_time_for` takes the fetch time, and for an
+archived copy only, replaces it with the file's stated release date when that date is
+*later* than the capture. Both the staged table and the point-in-time replay use it, so
+the two agree. A release date is a date, so it is read as midnight UTC, which keeps it a
+lower bound on the real moment inside that day.
+
+**Why only later, and only for archives.** A release date *earlier* than the fetch proves
+nothing: a file downloaded today has been known since today whatever it says about
+itself, and moving knowledge backwards would claim a history we did not have. And a file
+we fetched ourselves has a knowledge time we observed directly, which no claim inside it
+can improve on.
+
+**Consequence, and the limit.** The correction can only move a knowledge time later, so
+it could in principle push one file past the next and replay them out of order, which
+would invent revisions. No archived dataset here does that (checked 2026-10-18), and
+`pit.replay` now stops with a message naming both files rather than guessing. If a
+future capture trips it, the fix is to sort the file list by corrected knowledge time,
+which costs a second read of every file and is why it was not done now.
+
+## D-030: Texas stands in for the Permian, and says so (2026-10-18)
+
+**Context.** Negative prices at the Waha hub in West Texas are a famous consequence of
+Permian gas production outrunning pipeline takeaway capacity. The hub price itself is a
+proprietary index (Natural Gas Intelligence, Platts) and cannot be published here, so
+the question became whether the production side is worth having on its own.
+
+**Decision.** Add Texas crude oil production and Texas marketed gas production, monthly,
+from EIA's keyless spreadsheets — and name them after Texas, not the Permian.
+
+**Why not "Permian".** EIA publishes production by state. The Permian straddles Texas
+and New Mexico, and the basin-level series existed only in the Drilling Productivity
+Report, which EIA folded into the Short-Term Energy Outlook in June 2024. Calling a state
+series a basin series would be the kind of quiet mislabelling the rest of this project
+exists to catch. The contracts say what they are and the note explains the relationship.
+
+**Why these two datasets earn their place.** Every other dataset here is a price, a
+position or a stock level, and none of those get revised — which is why the showpiece
+finding had to be values *withdrawn*. Production is an estimate that firms up for years.
+Measured across 14 archived copies of each file on 2026-10-18: a routine monthly release
+rewrites exactly the last two months, and roughly once a year a benchmarking release
+rewrites a hundred or more months at once, back as far as 2007. Gas revises harder than
+crude — single months have moved by up to 12.5%, against about 4% for crude. No month has
+ever been withdrawn, in 26 vintage-to-vintage comparisons, which makes `no_withdrawals`
+worth asserting here precisely because it has never fired.
+
+**Consequence.** The point-in-time store finally has a series whose past changes as a
+matter of routine rather than through loss: January 2015 Texas gas production was
+published as 653,831 MMcf and now reads 666,792. Nothing yet *notices* a revision — no
+check looks at one — which is the obvious next control to build.

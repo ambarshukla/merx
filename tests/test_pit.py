@@ -6,6 +6,7 @@ from pathlib import Path
 
 import dagster as dg
 import duckdb
+import pytest
 from conftest import eia_workbook
 from test_pipeline import FileFetcher
 
@@ -128,7 +129,15 @@ def test_archive_import_backfills_history_and_never_feeds_staging(tmp_path):
     files = {}
     for capture, value in ((old, 2888.0), (later, 2878.0)):  # a real-looking revision
         path = tmp_path / f"{capture.timestamp}.xls"
-        path.write_bytes(eia_workbook(KEY, [(date(2017, 6, 30), value)]))
+        # An archived copy states a release date at or before its own capture; a later
+        # one would mean the capture stamp is wrong, which is its own case (D-029).
+        path.write_bytes(
+            eia_workbook(
+                KEY,
+                [(date(2017, 6, 30), value)],
+                release_date=f"{capture.captured_at_utc:%m/%d/%Y}",
+            )
+        )
         files[wayback.capture_url(url, capture)] = str(path)
     index = tmp_path / "index.json"
     index.write_text(
@@ -180,3 +189,30 @@ def test_a_gzip_compressed_copy_is_read_like_the_plain_file(tmp_path):
 
     plain = eia_workbook(KEY, [(D1, 3492.0)])
     assert formats.read(gzip.compress(plain), STORAGE) == formats.read(plain, STORAGE)
+
+
+def test_replay_stops_when_a_correction_would_break_knowledge_order(tmp_path):
+    """The release-date correction (D-029) only moves a knowledge time later, so it can
+    in principle push one file past the next. Nothing in the real data does, and guessing
+    an order would invent revisions, so the rebuild stops instead."""
+    zone = RawZone(tmp_path)
+    # An archived copy stamped early but stating a release date after the next file:
+    # replaying them in fetch order would be replaying them out of knowledge order.
+    zone.land(
+        dataset_id=STORAGE.id,
+        provider="eia",
+        url=STORAGE.source.url,
+        content=eia_workbook(KEY, [(D1, 3492.0)], release_date="12/31/2024"),
+        http_status=200,
+        headers={},
+        fetched_at_utc=datetime(2024, 1, 1, 12),
+        origin="archive",
+        archive_url="https://web.archive.org/web/20240101120000id_/x",
+    )
+    land(zone, [(D1, 3493.0)], datetime(2024, 6, 1, 12, tzinfo=UTC))
+    con = connect(tmp_path)
+    try:
+        with pytest.raises(ValueError, match="replay needs knowledge order"):
+            pit.build(con, STORAGE, zone)
+    finally:
+        con.close()

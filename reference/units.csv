@@ -9,3 +9,4 @@ MWh,megawatt hours,energy
 gCO2/kWh,grams of carbon dioxide per kilowatt hour,intensity
 USD/mt,US dollars per metric tonne,price
 USD/troy oz,US dollars per troy ounce (31.1 grams),price
+MMcf,million cubic feet of natural gas,volume

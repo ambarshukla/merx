@@ -57,17 +57,20 @@ def test_an_empty_store_reports_nothing(tmp_path):
     assert client.get("/api/client/findings").json() == []
 
 
-def withdraw(tmp_path, points) -> tuple[TestClient, datetime]:
+def withdraw(tmp_path, points) -> tuple[TestClient, datetime, date]:
     """Publish a series, then republish it with three values gone, and own the loss.
 
     The instant between the two runs is handed back: a test that happens inside one
     second cannot use a date to tell "before" from "after", but the history is stamped
-    to the microsecond and the replay takes a full timestamp.
+    to the microsecond and the replay takes a full timestamp. So is the day the loss was
+    noticed, because comparing with ``date.today()`` afterwards fails a run that crosses
+    midnight.
     """
     data_dir = tmp_path / "data"
     run(data_dir, points)
     between = datetime.now(UTC).replace(tzinfo=None)
     run(data_dir, points[:4] + points[7:])
+    noticed = datetime.now(UTC).date()
     con = connect(data_dir)
     try:
         ops.ensure_tables(con)
@@ -77,7 +80,7 @@ def withdraw(tmp_path, points) -> tuple[TestClient, datetime]:
         ops.assign_root_cause(con, exception_id, "source_data_error", "the source dropped them")
     finally:
         con.close()
-    return TestClient(create_app(data_dir)), between
+    return TestClient(create_app(data_dir)), between, noticed
 
 
 def replay(client: TestClient, at) -> int:
@@ -90,7 +93,7 @@ def replay(client: TestClient, at) -> int:
 
 
 def test_a_withdrawal_becomes_a_finding(tmp_path, points):
-    client, between = withdraw(tmp_path, points)
+    client, _, noticed = withdraw(tmp_path, points)
     (finding,) = client.get("/api/client/findings").json()
     assert finding["kind"] == "withdrawn"
     assert finding["number"] == "3"
@@ -98,11 +101,11 @@ def test_a_withdrawal_becomes_a_finding(tmp_path, points):
     assert finding["caught_by"] == "no_withdrawals"
     assert [s["count"] for s in finding["series"]] == [3]
     # The date offered is the day the removal was noticed, replayed as at its midnight.
-    assert finding["asof"] == date.today().isoformat()
+    assert finding["asof"] == noticed.isoformat()
 
 
 def test_the_replay_the_finding_points_at_really_does_show_the_lost_values(tmp_path, points):
-    client, between = withdraw(tmp_path, points)
+    client, between, _ = withdraw(tmp_path, points)
     assert replay(client, between) == 12, "before the removal the history held every value"
     assert replay(client, datetime(2999, 1, 1)) == 9, "and now it holds three fewer"
     # Tier 1: the gate refused the shorter build, so users still see the last good one.
@@ -112,7 +115,7 @@ def test_the_replay_the_finding_points_at_really_does_show_the_lost_values(tmp_p
 
 def test_a_finding_goes_away_when_the_loss_is_accepted(tmp_path, points):
     """Closing the exception closes the finding: the panel tracks the records, not a list."""
-    client, _ = withdraw(tmp_path, points)
+    client, _, _ = withdraw(tmp_path, points)
     assert len(client.get("/api/client/findings").json()) == 1
     con = connect(tmp_path / "data")
     try:

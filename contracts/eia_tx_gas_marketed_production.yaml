@@ -1,0 +1,38 @@
+# Texas marketed production of natural gas, monthly.
+#
+# "Marketed" means gross withdrawals less gas reinjected, vented or flared: the gas that
+# actually left the field for sale. It is the natural-gas twin of
+# eia_tx_crude_production, and it revises harder — probed 2026-10-18, benchmarking
+# releases have moved single months by up to 11%, against about 4% for crude.
+#
+# Texas is a state, not a basin: see the note in eia_tx_crude_production.yaml and D-030.
+id: eia_tx_gas_marketed_production
+title: Texas natural gas marketed production, monthly
+domain: gas
+owner: gas-data-steward
+tier: 2
+frequency: monthly
+instrument: TX_GAS_MARKETED_PRODUCTION
+unit: MMcf
+measures: [production]
+source:
+  provider: eia
+  format: eia_hist_xls
+  url: https://www.eia.gov/dnav/ng/hist_xls/N9050TX2m.xls
+  series_key: N9050TX2
+  # 14 distinct archived copies, 2011-07 to 2026-05. One of them is why knowledge time is
+  # not simply capture time: see D-029.
+  archive_backfill: true
+schedule:
+  cron: "0 14 * * 3"
+  timezone: America/New_York
+checks:
+  # No blanks in 451 months.
+  - {type: not_null, column: value}
+  - {type: unique, columns: [measure, valid_date]}
+  # Observed range over the full history is 391,608 to 1,157,796 MMcf a month.
+  - {type: range, column: value, min: 0, max: 3000000}
+  # Same release calendar as the crude series: see the note there.
+  - {type: freshness, max_age_days: 125}
+  - {type: no_withdrawals}
+in_quality_lab: false
