@@ -46,6 +46,7 @@ uses them.
 | **Idempotent** | Running a step twice gives the same result as running it once. Staging is idempotent: it rebuilds the table from one raw file. |
 | **Knowledge time** | The moment a value became known to us. Used to rebuild history "as known then". |
 | **Long form** | A table shape with one row per (measure, date) and a single value column, rather than one column per measure. |
+| **Lower 48** | The 48 contiguous US states: the United States without Alaska and Hawaii. Gas reports use it because neither is connected to the North American pipeline network, so their gas cannot reach the market the price is set in. The Lower 48 behaves as one connected system — gas stored in Louisiana in summer can be burned in Boston in winter. |
 | **MAD (median absolute deviation)** | A robust measure of spread: the median of the distances from the median. Unlike standard deviation, one spike does not distort it. |
 | **Managed money** | In the COT report, funds that trade futures for clients: hedge funds and commodity trading advisers. |
 | **Manifest** | The table recording every raw download: where it came from, when, its hash and size. |
@@ -102,5 +103,6 @@ uses them.
 | **Waha** | A natural gas trading hub in West Texas, known for negative prices when Permian output exceeds takeaway capacity. Its price is a proprietary index, so it is deliberately not used here (`docs/PROVENANCE.md`). |
 | **Wayback Machine** | The Internet Archive's public collection of dated copies of web pages and files. Used here to recover past versions of source files. |
 | **Withdrawal** | A value that was in an earlier version of a dataset and is missing from the current one. |
+| **Working gas** | The gas in storage that can actually be withdrawn and sold, as opposed to the base gas left in place permanently to keep the reservoir at usable pressure. EIA's weekly storage figure is working gas only. |
 | **WTI (West Texas Intermediate)** | The main US crude oil price benchmark, priced at Cushing, Oklahoma. |
 | **Z-score** | How many typical deviations a value lies from normal. The robust version uses the median and MAD instead of the mean and standard deviation. |
